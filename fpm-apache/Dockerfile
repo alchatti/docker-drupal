@@ -3,10 +3,7 @@ FROM serversideup/php:8.4-fpm-apache
 USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git \
       unzip \
-      rsync \
-      default-mysql-client \
       libjpeg62-turbo \
       libpng16-16 \
       libwebp7 \
