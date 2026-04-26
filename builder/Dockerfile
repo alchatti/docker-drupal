@@ -1,22 +1,24 @@
-ARG PHP=8.2
-# Debian Relesases code names at https://wiki.debian.org/DebianReleases#Production_Releases
-ARG DEBIAN=bullseye
-
-FROM php:${PHP}-${DEBIAN}
-
 ARG PHP
-ARG DEBIAN
+# Debian Relesases code names at https://wiki.debian.org/DebianReleases#Production_Releases
+ARG VARIANT
+# NodeJS version preferably LTS
 ARG NODE
+# Supplied at Build time
 ARG CREATE_DATE
+# Optional
+ARG VERSION=RC
 
-LABEL org.opencontainers.image.title="Composer with Node"
-LABEL org.opencontainers.image.description="CI Builder Image with PHP $PHP, Composer and NodeJS $NODE"
+FROM php:${PHP}-${VARIANT}
+
+LABEL org.opencontainers.image.title="PHP Builder"
+LABEL org.opencontainers.image.description="Builder Image with PHP $PHP, Composer and NodeJS $NODE"
 LABEL org.opencontainers.image.authors="Majed Al-Chatti"
-LABEL org.opencontainers.image.source="https://github.com/alchatti/ci-composer-node"
-LABEL org.opencontainers.image.documentation="https://github.com/alchatti/ci-composer-node"
-LABEL org.opencontainers.image.base.name="alchatti/ci-composer-node"
-LABEL org.opencontainers.image.ref.name="alchatti/ci-composer-node:p$PHP-n$NODE-$DEBIAN"
+LABEL org.opencontainers.image.source="https://github.com/alchatti/docker-php"
+LABEL org.opencontainers.image.documentation="https://github.com/alchatti/docker-php/build"
+LABEL org.opencontainers.image.base.name="alchatti/php-builder"
+LABEL org.opencontainers.image.ref.name="alchatti/php-builder:p$PHP-n$NODE-$VARIANT"
 LABEL org.opencontainers.image.created=$CREATE_DATE
+LABEL org.opencontainers.image.version=$VERSION
 
 ENV NODE=${NODE:-22}
 
