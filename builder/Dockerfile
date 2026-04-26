@@ -1,6 +1,6 @@
 ARG PHP
 # Debian Relesases code names at https://wiki.debian.org/DebianReleases#Production_Releases
-ARG OS_VARIANT
+ARG OS
 # NodeJS - LTS even 
 ARG NODE
 # Supplied at Build time
@@ -27,6 +27,7 @@ COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 # Install dependencies & nodejs
 RUN curl -fsSL https://deb.nodesource.com/setup_$NODE.x | bash - \
     && apt-get update && apt-get install -y \
+    # validate this line
     && unzip ca-certificates bash \
     && apt-get install -y nodejs \
     && echo "Composer version: $(composer --version)\n" \
