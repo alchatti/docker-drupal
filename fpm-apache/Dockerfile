@@ -14,11 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       bcmath \
       gd \
       intl \
-      opcache \
-      pdo_mysql \
-      zip \
       exif \
-      redis \
       imagick \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -35,7 +31,7 @@ RUN { \
       echo "opcache.interned_strings_buffer=16"; \
       echo "opcache.max_accelerated_files=20000"; \
       echo "opcache.validate_timestamps=0"; \
-    } > /usr/local/etc/php/conf.d/99-drupal-production.ini
+    } > /usr/local/etc/php/conf.d/zzz-drupal-production.ini
 
 # App code will be copied later
 WORKDIR /var/www/html
