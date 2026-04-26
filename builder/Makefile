@@ -5,12 +5,12 @@
 .DEFAULT_GOAL := help
 
 # Variables (overridable)
-DEBIAN ?= bookworm
 PHP_VERSION ?= 8.3
-NODE_VERSION ?= 22
+NODE_VERSION ?= 24
+OS_VERSION ?= trixi
 
-IMAGE_NAME ?= ci-composer-node
-IMAGE_TAG ?= p$(PHP_VERSION)-n$(NODE_VERSION)-$(DEBIAN)
+IMAGE_NAME ?= php-builder
+IMAGE_TAG ?= p$(PHP_VERSION)-n$(NODE_VERSION)-$(OS_VERSION)
 
 TIMESTAMP := $(shell date +'%Y%m%d')
 IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
@@ -21,10 +21,11 @@ IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
 build:
 	@echo "🛠️  Building Docker image: $(IMAGE)"
 	docker build \
-		--build-arg DEBIAN=$(DEBIAN) \
+		--build-arg OS=$(OS_VERSION) \
 		--build-arg PHP=$(PHP_VERSION) \
-		--build-arg NODE_VERSION=$(NODE_VERSION) \
+		--build-arg NODE=$(NODE_VERSION) \
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
+        --build-arg RELEASE='MAKE'
 		--no-cache \
 		-t $(IMAGE) .
 
