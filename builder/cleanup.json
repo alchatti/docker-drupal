@@ -1,0 +1,48 @@
+{
+  "removePatterns": [
+    "*.scss",
+    "*.sass",
+    "*.less",
+    "*.ts",
+    "*.tsx",
+    "*.jsx",
+    "*.map",
+    ".gitignore",
+    ".editorconfig",
+    ".prettierrc",
+    ".eslintrc*",
+    ".stylelintrc*",
+    ".browserlistrc",
+    "tailwind.config.*",
+    "postcss.config.*",
+    "tsconfig.*",
+    "vite.config.*",
+    "webpack.config.*",
+    "gulpfile.*",
+    "package-lock.json",
+    "package.json",
+    "*.log",
+    ".env",
+    ".env.*", 
+    ".cache"
+    ".DS_Store"
+    ".dll"
+  ],
+  "removeDirs": [
+    "node_modules",
+    "dump", 
+    "src",
+    "stories",
+    "tests",
+    "__mocks__",
+    ".storybook",
+    ".vscode",
+    ".idea"
+    ".git",
+    ".cache"
+  ],
+  "protectedPaths": [
+    "/recipes",
+    "/vendor"
+  ]
+}
