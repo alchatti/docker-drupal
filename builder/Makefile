@@ -9,7 +9,7 @@ PHP_VERSION ?= 8.3
 NODE_VERSION ?= 24
 OS_VERSION ?= trixie
 
-IMAGE_NAME ?= php-builder
+IMAGE_NAME ?= alchatti/php-builder
 IMAGE_TAG ?= p$(PHP_VERSION)-n$(NODE_VERSION)-$(OS_VERSION)
 
 TIMESTAMP := $(shell date +'%Y%m%d')
