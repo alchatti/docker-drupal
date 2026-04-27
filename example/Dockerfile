@@ -3,7 +3,7 @@
 # ==========================
 FROM alchatti/php-builder:latest AS builder
 
-WORKDIR /app
+# WORKDIR /app
 
 COPY composer.json composer.lock package*.json ./
 RUN npm install --omit=dev
@@ -21,5 +21,5 @@ RUN cleanup-build
 # ==========================
 FROM alchatti/drupal-fpm-apache:latest
 
-WORKDIR /var/www/html
+# WORKDIR /var/www/html
 COPY --from=builder --chown=www-data:www-data /app/ ./
