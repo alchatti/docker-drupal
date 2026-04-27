@@ -1,6 +1,6 @@
 services:
   php:
-    image: alchatti/docker-fpm-apache:latest
+    image: drupal-testflight:latest
     ports:
       - "80:8080"
     environment:
