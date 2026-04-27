@@ -1,7 +1,7 @@
 # ==========================
 # 1) Builder Stage
 # ==========================
-FROM ghcr.io/your-org/drupal-builder:php83-node22-fnm AS builder
+FROM alchatti/php-builder:latest AS builder
 
 WORKDIR /app
 
@@ -19,14 +19,7 @@ RUN cleanup-build
 # ==========================
 # 2) Runtime Stage
 # ==========================
-FROM drupal:10.3-php8.3-apache
+FROM alchatti/drupal-fpm-apache:latest
 
 WORKDIR /var/www/html
-RUN rm -rf ./*
-
-COPY --from=builder /app .
-
-RUN chown -R www-data:www-data /var/www/html
-
-EXPOSE 80
-CMD ["apache2-foreground"]
+COPY --from=builder --chown=www-data:www-data /app/ ./
