@@ -7,7 +7,7 @@
 # Variables (overridable)
 PHP_VERSION ?= 8.3
 NODE_VERSION ?= 24
-OS_VERSION ?= trixi
+OS_VERSION ?= trixie
 
 IMAGE_NAME ?= php-builder
 IMAGE_TAG ?= p$(PHP_VERSION)-n$(NODE_VERSION)-$(OS_VERSION)
