@@ -5,7 +5,7 @@
 #   make check-mods
 #   make stop
 
-IMAGE ?= drupal-fpm-apache:latest
+IMAGE ?= alchatri/drupal-fpm-apache:latest
 NAME  ?= drupal-fpm
 
 .PHONY: build run check-mods stop
