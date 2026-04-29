@@ -55,6 +55,7 @@ RUN apt update \
     && echo "Composer version: $(composer --version)\n" \
     && echo "Node.js version: $(node --version)\n" \
     && echo "NPM version: $(npm --version)\n" \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Add Build cleanup tooling

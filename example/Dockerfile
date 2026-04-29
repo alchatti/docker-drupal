@@ -5,15 +5,12 @@ FROM alchatti/php-builder:latest AS builder
 
 # WORKDIR /app
 
-COPY composer.json composer.lock package*.json ./
-RUN npm install --omit=dev
-
-COPY . .
+COPY ./app ./
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Clean development artifacts
-RUN cleanup-build
+#RUN cleanup-build
 
 
 # ==========================
