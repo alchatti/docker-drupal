@@ -25,14 +25,16 @@ build:
 		--build-arg PHP=$(PHP_VERSION) \
 		--build-arg NODE=$(NODE_VERSION) \
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
-        --build-arg RELEASE='MAKE'
+        --build-arg RELEASE='MAKE' \
 		--no-cache \
 		-t $(IMAGE) .
 
 ## 🚀 Run the container interactively
 run:
 	@echo "🚀 Starting $(IMAGE)..."
-	docker run --rm -it $(IMAGE) bash
+	docker run --rm -it \
+	-v ../example/app:/app \
+	$(IMAGE) bash
 
 ## 🔍 Check installed versions inside the image
 check:
@@ -42,10 +44,3 @@ check:
 		echo && echo '✅ Composer Version:' && composer --version && \
 		echo && echo '✅ Node Version:' && node --version && \
 		echo && echo '✅ NPM Version:' && npm --version"
-
-## 📘 Display help
-help:
-	@echo ""
-	@echo "📘 Available Commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-10s %s\n", $$1, $$2}'
-	@echo ""
