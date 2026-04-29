@@ -36,7 +36,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        php_ver: [ "8.3", "8.4" ]
+        php_ver: [ "8.4" ]
         node_ver: [ "24" ]
         os_ver: [ trixie ]
     uses: ./.github/workflows/reusable-docker-build-push.yml
@@ -53,24 +53,6 @@ jobs:
       tags: |
         alchatti/php-builder:p${{ matrix.php_ver }}-n${{ matrix.node_ver }}-${{ matrix.os_ver }}
         alchatti/php-builder:${{ matrix.php_ver }}-${{ needs.prepare.outputs.date }}
-        alchatti/php-builder:${{ matrix.php_ver }}-latest
-    secrets: inherit
-
-    needs: prepare
-    permissions:
-      contents: read
-    uses: ./.github/workflows/reusable-docker-build-push.yml
-    with:
-      context: ./builder
-      dockerfile: ./builder/Dockerfile
-      platforms: linux/amd64,linux/arm64
-      build_args: |
-        PHP=8.3
-        NODE=24
-        OS=trixie
-        CREATE_DATE=${{ needs.prepare.outputs.date }}
-        VERSION=GHA-${{ github.run_number }}
-      tags: |
         alchatti/php-builder:latest
     secrets: inherit
 
