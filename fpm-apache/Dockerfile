@@ -45,7 +45,7 @@ RUN { \
   } > /usr/local/etc/php/conf.d/zzz-drupal-production.ini
 
 # Volume mount point
-Run mkdir -p -m 755 /mnt/files \
+RUN mkdir -p -m 755 /mnt/files \
 && chown -R www-data:www-data /mnt/files
 
 # App code will be copied later
