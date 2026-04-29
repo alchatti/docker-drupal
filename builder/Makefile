@@ -27,6 +27,7 @@ build:
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
         --build-arg RELEASE='MAKE' \
 		--no-cache \
+		-t $(IMAGE_NAME):latest \
 		-t $(IMAGE) .
 
 ## 🚀 Run the container interactively

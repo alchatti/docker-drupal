@@ -5,7 +5,7 @@
 #   make check-mods
 #   make stop
 
-IMAGE ?= alchatri/drupal-fpm-apache:latest
+IMAGE ?= alchatti/drupal-fpm-apache:latest
 NAME  ?= drupal-fpm
 
 .PHONY: build run check-mods stop
@@ -26,4 +26,4 @@ check-mods:
 
 # Stop the running container (if needed)
 stop:
-	-@docker stop $(NAME) >/dev/null 2>&1 || true 
+	-@docker stop $(NAME) >/dev/null 2>&1 || true
