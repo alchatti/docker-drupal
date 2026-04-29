@@ -1,34 +1,56 @@
-ARG PHP
+ARG PHP=8.1
 # Debian Relesases code names at https://wiki.debian.org/DebianReleases#Production_Releases
-ARG OS
-# NodeJS - LTS even 
-ARG NODE
+ARG OS=bookworm
+# NodeJS - LTS even
+ARG NODE=22
 # Supplied at Build time
-ARG CREATE_DATE
+ARG CREATE_DATE="NA"
 # Release identifier - Alpha 0
 ARG VERSION=A-0
 
-FROM php:${PHP}-${OS_VARIANT}
+FROM php:${PHP}-${OS}
 
 LABEL org.opencontainers.image.title="PHP Builder"
-LABEL org.opencontainers.image.description="Builder Image with PHP $PHP, Composer and NodeJS $Node on $OS_VARIANT"
+LABEL org.opencontainers.image.description="Builder Image with PHP $PHP, Composer and NodeJS $Node on $OS"
 LABEL org.opencontainers.image.authors="Majed Al-Chatti"
 LABEL org.opencontainers.image.source="https://github.com/alchatti/docker-php"
 LABEL org.opencontainers.image.documentation="https://github.com/alchatti/docker-php/build"
 LABEL org.opencontainers.image.base.name="alchatti/php-builder"
-LABEL org.opencontainers.image.ref.name="alchatti/php-builder:c2-p$PHP-n$NODE-$OS_VARIANT"
+LABEL org.opencontainers.image.ref.name="alchatti/php-builder:c2-p$PHP-n$NODE-$OS"
 LABEL org.opencontainers.image.created=$CREATE_DATE
 LABEL org.opencontainers.image.version=$VERSION
 
-ENV NODE=${NODE:-24}
+ENV NODE=${NODE}
 
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
 # Install dependencies & nodejs
-RUN curl -fsSL https://deb.nodesource.com/setup_$NODE.x | bash - \
-    && apt-get update && apt-get install -y \
-    # validate this line
-    && unzip ca-certificates bash \
+RUN apt update \
+    && apt install -y --no-install-recommends \
+    unzip \
+    ca-certificates \
+    bash \
+    libfreetype6-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libpq-dev \
+    libwebp-dev \
+    libzip-dev \
+    ; \
+    \
+    docker-php-ext-configure gd \
+    --with-freetype \
+    --with-jpeg=/usr \
+    --with-webp \
+    ; \
+    \
+    docker-php-ext-install -j "$(nproc)" \
+    gd \
+    pdo_mysql \
+    pdo_pgsql \
+    zip \
+    ; \
+    curl -fsSL https://deb.nodesource.com/setup_$NODE.x | bash - \
     && apt-get install -y nodejs \
     && echo "Composer version: $(composer --version)\n" \
     && echo "Node.js version: $(node --version)\n" \
