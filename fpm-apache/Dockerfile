@@ -44,9 +44,10 @@ RUN { \
   echo "opcache.validate_timestamps=0"; \
   } > /usr/local/etc/php/conf.d/zzz-drupal-production.ini
 
-# Volume mount point
-RUN mkdir -p -m 755 /mnt/files \
-&& chown -R www-data:www-data /mnt/files
+# Create mount point and set permissions
+RUN mkdir -p /mnt/files \
+    && chown -R www-data:www-data /mnt/files \
+    && chmod 755 /mnt/files
 
 # App code will be copied later
 WORKDIR /var/www/html
