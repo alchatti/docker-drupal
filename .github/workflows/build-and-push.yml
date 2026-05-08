@@ -60,6 +60,9 @@ jobs:
     needs: prepare
     permissions:
       contents: read
+    strategy:
+      matrix:
+        php_ver: [ "8.4" ]
     uses: ./.github/workflows/reusable-docker-build-push.yml
     with:
       context: ./fpm-apache
