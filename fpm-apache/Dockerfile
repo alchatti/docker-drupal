@@ -1,6 +1,6 @@
 ARG PHP
 
-FROM serversideup/php:{PHP}-fpm-apache
+FROM serversideup/php:${PHP}-fpm-apache
 
 USER root
 
