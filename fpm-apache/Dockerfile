@@ -14,7 +14,7 @@ RUN apt-get update \
   libwebp-dev \
   libzip-dev \
   mariadb-client \
-  # default-mysql-client \
+  postgresql-client \
   ; \
   \
   docker-php-ext-configure gd \
