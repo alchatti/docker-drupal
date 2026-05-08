@@ -1,4 +1,6 @@
-FROM serversideup/php:8.4-fpm-apache
+ARG PHP
+
+FROM serversideup/php:{PHP}-fpm-apache
 
 USER root
 
