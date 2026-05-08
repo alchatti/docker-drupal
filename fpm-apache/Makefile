@@ -5,13 +5,16 @@
 #   make check-mods
 #   make stop
 
+PHP_VERSION ?=8.4
 IMAGE ?= alchatti/drupal-fpm-apache:latest
 NAME  ?= drupal-fpm
 
 .PHONY: build run check-mods stop
 
 build:
-	docker build -t $(IMAGE) .
+	docker build \
+    --build-arg PHP=$(PHP_VERSION) \
+    -t $(IMAGE) .
 
 # Run with a fixed name so we can exec into it.
 # Memory limit is optional; defaults to 2GB.
