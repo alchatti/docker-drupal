@@ -1,7 +1,7 @@
 # ==========================
 # 1) Builder Stage
 # ==========================
-FROM docker.io/alchatti/php-builder:latest AS builder
+FROM alchatti/php-builder:latest AS builder
 
 # WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 # ==========================
 # 2) Runtime Stage
 # ==========================
-FROM docker.io/alchatti/drupal-fpm-apache:latest
+FROM alchatti/drupal-fpm-apache:latest
 
 # WORKDIR /var/www/html
 COPY --from=builder --chown=www-data:www-data /app/ ./
