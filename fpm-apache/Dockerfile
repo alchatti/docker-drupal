@@ -13,6 +13,8 @@ RUN apt-get update \
   libpq-dev \
   libwebp-dev \
   libzip-dev \
+  mariadb-client \
+  # default-mysql-client \
   ; \
   \
   docker-php-ext-configure gd \
@@ -26,6 +28,9 @@ RUN apt-get update \
   pdo_mysql \
   pdo_pgsql \
   zip \
+  ; \
+  pecl install redis \
+  && docker-php-ext-enable redis \
   ; \
   apt-get clean \
   && rm -rf /var/lib/apt/lists/*
