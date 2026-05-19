@@ -52,9 +52,9 @@ RUN { \
   } > /usr/local/etc/php/conf.d/zzz-drupal-production.ini
 
 # Create mount point and set permissions
-RUN mkdir -p /mnt/files \
+RUN mkdir -p /mnt/files/{public,private,tmp,config/sync}\
     && chown -R www-data:www-data /mnt/files \
-    && chmod 755 /mnt/files
+    && chmod -R 755 /mnt/files
 
 # App code will be copied later
 WORKDIR /var/www/html
