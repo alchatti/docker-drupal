@@ -1,0 +1,78 @@
+name: Dynamic Matrix Generator
+
+on:
+  workflow_call:
+    inputs:
+      php_versions:
+        required: true
+        type: string
+        description: 'JSON array string of PHP versions, e.g. ["8.2", "8.3"]'
+      os_versions:
+        required: true
+        type: string
+        description: 'JSON array string of OS versions, e.g. ["bookworm", "trixie"]'
+      blueprints:
+        required: true
+        type: string
+        description: 'JSON object string mapping folders to extra args'
+    outputs:
+      matrix:
+        description: "Generated build matrix JSON array"
+        value: ${{ jobs.generate.outputs.matrix }}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Compute Matrix Permutations
+        id: set-matrix
+        run: |
+          DATE=$(date +'%Y%m%d')
+          RUN_NUMBER="${{ github.run_number }}"
+          
+          USER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          CLEAN_REPO="${REPO#docker-}"
+
+          # Parse the inputs directly into shell arrays using jq
+          readarray -t PHP_ARR < <(echo '${{ inputs.php_versions }}' | jq -r '.[]')
+          readarray -t OS_ARR < <(echo '${{ inputs.os_versions }}' | jq -r '.[]')
+
+          LATEST_PHP=$(echo '${{ inputs.php_versions }}' | jq -r '.[-1]')
+          LATEST_OS=$(echo '${{ inputs.os_versions }}' | jq -r '.[-1]')
+          
+          FINAL_MATRIX='[]'
+
+          for PHP in "${PHP_ARR[@]}"; do
+            for OS in "${OS_ARR[@]}"; do
+
+              BASE_ARGS='["PHP='"$PHP"'", "OS='"$OS"'", "CREATE_DATE='"$DATE"'", "VERSION=GHA-'"$RUN_NUMBER"'"]'
+
+              ITERATION_MATRIX=$(echo '${{ inputs.blueprints }}' | jq -c \
+                --argjson base "$BASE_ARGS" \
+                --arg user "$USER" \
+                --arg repo "$CLEAN_REPO" \
+                --arg php "$PHP" \
+                --arg os "$OS" \
+                --arg date "$DATE" \
+                --arg latest_php "$LATEST_PHP" \
+                --arg latest_os "$LATEST_OS" '
+                to_entries | map(
+                  (.key) as $folder
+                  | {
+                      "context": ("./" + $folder),
+                      "build_args": (($base + .value) | join("\n"))
+                    }
+                  | ( $user + "/" + $repo + "-" + $folder ) as $base_tag
+                  | .tags = ($base_tag + ":" + $php + "-" + $os + "-" + $date)
+                  | if $php == $latest_php and $os == $latest_os then .tags = .tags + "\n" + $base_tag + ":latest" else . end
+                )
+              ')
+
+              FINAL_MATRIX=$(jq -c --argjson new "$ITERATION_MATRIX" '$new + .' <<< "$FINAL_MATRIX")
+            done
+          done
+
+          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
