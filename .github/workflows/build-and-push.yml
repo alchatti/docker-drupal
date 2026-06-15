@@ -24,57 +24,85 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      date: ${{ steps.date.outputs.date }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Get current date
-        id: date
-        run: echo "date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+      - name: Generate Centralized Matrix & Tags
+        id: set-matrix
+        run: |
+          DATE=$(date +'%Y%m%d')
+          NODE="24"
+          RUN_NUMBER="${{ github.run_number }}"
+          
+          # Dynamic Repository & Naming definitions
+          USER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          CLEAN_REPO="${REPO#docker-}" # Drops 'docker-' from 'docker-drupal' -> 'drupal'
+          
+          # Matrix Dimensions
+          PHP_VERSIONS=("8.2" "8.3" "8.4")
+          OS_VERSIONS=("bookworm" "trixie")
 
-  build-builder-versioned:
+          LATEST_PHP="${PHP_VERSIONS[-1]}"
+          LATEST_OS="${OS_VERSIONS[-1]}"
+          FINAL_MATRIX='[]'
+
+          for PHP in "${PHP_VERSIONS[@]}"; do
+            for OS in "${OS_VERSIONS[@]}"; do
+
+              # 1. Base args computed per iteration
+              BASE_ARGS='["PHP='"$PHP"'", "OS='"$OS"'", "CREATE_DATE='"$DATE"'", "VERSION=GHA-'"$RUN_NUMBER"'"]'
+
+              # 2. Key-Value Blueprint: Explicitly using empty arrays instead of null
+              BLUEPRINTS=$(cat <<EOF
+              {
+                "builder": ["NODE=${NODE}"],
+                "fpm-apache": []
+              }
+              EOF)
+
+              # 3. Direct array addition since .value is guaranteed to be an array
+              ITERATION_MATRIX=$(echo "$BLUEPRINTS" | jq -c \
+                --argjson base "$BASE_ARGS" \
+                --arg user "$USER" \
+                --arg repo "$CLEAN_REPO" \
+                --arg php "$PHP" \
+                --arg os "$OS" \
+                --arg date "$DATE" \
+                --arg latest_php "$LATEST_PHP" \
+                --arg latest_os "$LATEST_OS" '
+                to_entries | map(
+                  (.key) as $folder
+                  | {
+                      "context": ("./" + $folder),
+                      "build_args": (($base + .value) | join("\n"))
+                    }
+                  # Tag Naming Structure: user/cleanrepo-folder:php-os-date
+                  | ( $user + "/" + $repo + "-" + $folder ) as $base_tag
+                  | .tags = ($base_tag + ":" + $php + "-" + $os + "-" + $date)
+                  # Apply global :latest tag ONLY when both PHP and OS are the highest targets
+                  | if $php == $latest_php and $os == $latest_os then .tags = .tags + "\n" + $base_tag + ":latest" else . end
+                )
+              ')
+
+              FINAL_MATRIX=$(jq -c --argjson new "$ITERATION_MATRIX" '$new + .' <<< "$FINAL_MATRIX")
+            done
+          done
+
+          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
+
+  build:
     needs: prepare
     permissions:
       contents: read
     strategy:
       matrix:
-        php_ver: [ "8.4" ]
-        node_ver: [ "24" ]
-        os_ver: [ trixie ]
-    # uses: ./.github/workflows/reusable-docker-build-push.yml
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    
     uses: alchatti/.github/.github/workflows/docker-build-push.yml@main
     with:
-      context: ./builder
-      dockerfile: ./builder/Dockerfile
+      context: ${{ matrix.context }}
+      dockerfile: ${{ matrix.context }}/Dockerfile
       platforms: linux/amd64,linux/arm64
-      build_args: |
-        PHP=${{ matrix.php_ver }}
-        NODE=${{ matrix.node_ver }}
-        OS=${{ matrix.os_ver }}
-        CREATE_DATE=${{ needs.prepare.outputs.date }}
-        VERSION=GHA-${{ github.run_number }}
-      tags: |
-        alchatti/php-builder:p${{ matrix.php_ver }}-n${{ matrix.node_ver }}-${{ matrix.os_ver }}
-        alchatti/php-builder:${{ matrix.php_ver }}-${{ needs.prepare.outputs.date }}
-        alchatti/php-builder:latest
-    secrets: inherit
-
-  build-fpm-apache:
-    needs: prepare
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        php_ver: [ "8.4" ]
-    #uses: ./.github/workflows/reusable-docker-build-push.yml
-    uses: alchatti/.github/.github/workflows/docker-build-push.yml@main 
-    with:
-      context: ./fpm-apache
-      dockerfile: ./fpm-apache/Dockerfile
-      platforms: linux/amd64,linux/arm64
-      build_args: |
-        PHP=${{ matrix.php_ver }}
-        CREATE_DATE=${{ needs.prepare.outputs.date }}
-        VERSION=GHA-${{ github.run_number }}
-      tags: |
-        alchatti/drupal-fpm-apache:${{ needs.prepare.outputs.date }}
-        alchatti/drupal-fpm-apache:latest
+      build_args: ${{ matrix.build_args }}
+      tags: ${{ matrix.tags }}
     secrets: inherit
