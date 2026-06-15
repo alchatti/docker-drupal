@@ -21,7 +21,7 @@ jobs:
   prepare:
     uses: ./.github/workflows/matrix-generator.yml
     with:
-      php_versions: '["8.3", "8.4"]'
+      php_versions: '["8.3", "8.4","8.5"]'
       os_versions: '["bookworm", "trixie"]'
       blueprints: |
         {
