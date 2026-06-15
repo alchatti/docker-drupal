@@ -1,5 +1,5 @@
-ARG PHP
-ARG OS
+ARG PHP=8.3
+ARG OS=bookworm
 
 FROM serversideup/php:${PHP}-fpm-apache-${OS}
 
