@@ -20,6 +20,9 @@ RUN set -eux; \
         libzip-dev \
         libicu-dev \
         libxml2-dev \
+        # CRITICAL FIXES: Added missing development headers for extensions
+        zlib1g-dev \
+        g++ \
         mariadb-client \
         postgresql-client \
     ; \
@@ -43,7 +46,8 @@ RUN set -eux; \
         zip \
     ; \
     \
-    # Install PECL dependencies
+    # CRITICAL FIX: Explicitly update the pecl channel before running installation
+    pecl channel-update pecl.php.net; \
     pecl install redis; \
     docker-php-ext-enable redis; \
     \
@@ -60,6 +64,7 @@ RUN set -eux; \
     \
     apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
     rm -rf /var/lib/apt/lists/*
+
 
 # 3. [Non-Root Setup] Shift Apache configuration to unprivileged port 8080 & update DocumentRoot
 RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
