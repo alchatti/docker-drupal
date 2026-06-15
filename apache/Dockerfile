@@ -88,12 +88,21 @@ RUN chown -R www-data:www-data \
     /mnt/files \
     && chmod -R 755 /mnt/files
 
+# set recommended PHP.ini settings
+# see https://secure.php.net/manual/en/opcache.installation.php
 RUN { \
-    echo 'opcache.memory_consumption=128'; \
-    echo 'opcache.interned_strings_buffer=8'; \
-    echo 'opcache.max_accelerated_files=4000'; \
-    echo 'opcache.revalidate_freq=60'; \
-} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+		echo 'opcache.memory_consumption=128'; \
+		echo 'opcache.interned_strings_buffer=8'; \
+		echo 'opcache.max_accelerated_files=4000'; \
+		echo 'opcache.revalidate_freq=60'; \
+	} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+
+# https://www.drupal.org/node/3298550
+# Drupal now recommends sites enable PHP output buffering by default, if PHP is run as a server module
+# e.g. with Apache's mod_php
+RUN { \
+		echo 'output_buffering=true'; \
+	} > /usr/local/etc/php/conf.d/docker-php-drupal-recommended.ini
 
 # 9. Drop security privileges completely
 USER www-data
