@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Prepare Dynamic Job Matrix for Build
+  # Job 1: Generate the full matrix using target mapping conventions
   prepare:
     uses: ./.github/workflows/matrix-generator.yml
     with:
@@ -29,6 +29,7 @@ jobs:
           "fpm-apache": []
         }
 
+  # Job 2: Process single and multi-stage builds concurrently
   build:
     needs: prepare
     permissions:
@@ -44,5 +45,5 @@ jobs:
       platforms: linux/amd64,linux/arm64
       build_args: ${{ matrix.build_args }}
       tags: ${{ matrix.tags }}
+      target: ${{ matrix.target }}
     secrets: inherit
- 
