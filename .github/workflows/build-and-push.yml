@@ -48,4 +48,7 @@ jobs:
       build_args: ${{ matrix.build_args }}
       tags: ${{ matrix.tags }}
       target: ${{ matrix.target }}
+      # Explicitly pass cache configurations to the backend
+      cache_from: type=gha,scope=${{ matrix.context }}-${{ matrix.target }}
+      cache_to: type=gha,mode=max,scope=${{ matrix.context }}-${{ matrix.target }}
     secrets: inherit
