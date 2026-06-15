@@ -73,7 +73,8 @@ ENV PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/_config
 WORKDIR /var/www/html
 
 # 6. Global Drush Shortcut (Will hook natively once composer installs app files)
-RUN ln -s /var/www/html/vendor/bin/drush /usr/local/bin/drush
+#RUN ln -s /var/www/html/vendor/bin/drush /usr/local/bin/drush
+ENV PATH=${PATH}:/var/www/html/vendor/bin
 
 # 7. Copy Custom Entrypoint
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
