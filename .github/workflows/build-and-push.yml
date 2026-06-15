@@ -26,7 +26,8 @@ jobs:
       blueprints: |
         {
           "builder": ["NODE=24"],
-          "fpm-apache": []
+          "fpm-apache": [],
+          "apache":[]
         }
 
   # Job 2: Process single and multi-stage builds concurrently
