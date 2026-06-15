@@ -19,7 +19,7 @@ RUN set -eux; \
         libwebp-dev \
         libzip-dev \
         libicu-dev \
-        libxml2-dev \
+        # libxml2-dev \
         mariadb-client \
         postgresql-client \
     ; \
@@ -33,9 +33,9 @@ RUN set -eux; \
     \
     # Compile all extensions in a single parallelized layer
     docker-php-ext-install -j "$(nproc)" \
-        bcmath \
+        # bcmath \
         gd \
-        intl \
+        # intl \
         opcache \
         pdo_mysql \
         pdo_pgsql \
