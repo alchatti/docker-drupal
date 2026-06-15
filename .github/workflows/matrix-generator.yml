@@ -1,0 +1,94 @@
+name: Dynamic Matrix Generator
+
+on:
+  workflow_call:
+    inputs:
+      php_versions:
+        required: true
+        type: string
+      os_versions:
+        required: true
+        type: string
+      blueprints:
+        required: true
+        type: string
+    outputs:
+      matrix:
+        value: ${{ jobs.generate.outputs.matrix }}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Compute Matrix Permutations
+        id: set-matrix
+        run: |
+          DATE=$(date +'%Y%m%d')
+          RUN_NUMBER="${{ github.run_number }}"
+          
+          USER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          CLEAN_REPO="${REPO#docker-}"
+
+          readarray -t PHP_ARR < <(echo '${{ inputs.php_versions }}' | jq -r '.[]')
+          readarray -t OS_ARR < <(echo '${{ inputs.os_versions }}' | jq -r '.[]')
+
+          # Extract the highest elements to flag the global :latest tag
+          LATEST_PHP=$(echo '${{ inputs.php_versions }}' | jq -r '.[-1]')
+          LATEST_OS=$(echo '${{ inputs.os_versions }}' | jq -r '.[-1]')
+          
+          FINAL_MATRIX='[]'
+
+          for PHP in "${PHP_ARR[@]}"; do
+            for OS in "${OS_ARR[@]}"; do
+
+              BASE_ARGS='["PHP='"$PHP"'", "OS='"$OS"'", "CREATE_DATE='"$DATE"'", "VERSION=GHA-'"$RUN_NUMBER"'"]'
+
+              ITERATION_MATRIX=$(echo '${{ inputs.blueprints }}' | jq -c \
+                --argjson base "$BASE_ARGS" \
+                --arg user "$USER" \
+                --arg repo "$CLEAN_REPO" \
+                --arg php "$PHP" \
+                --arg os "$OS" \
+                --arg date "$DATE" \
+                --arg latest_php "$LATEST_PHP" \
+                --arg latest_os "$LATEST_OS" '
+                to_entries | map(
+                  (.key | split("@")) as $parts
+                  | $parts[0] as $folder
+                  | ($parts[1] // "") as $target
+                  | {
+                      "context": ("./" + $folder),
+                      "target": $target,
+                      "build_args": (($base + .value) | join("\n"))
+                    }
+                  | ($parts | join("-")) as $tag_suffix
+                  | ( $user + "/" + $repo + "-" + $tag_suffix ) as $base_tag
+                  
+                  # Primary tag structured precisely as php-os (e.g. 8.4-bookworm)
+                  | .tags = ($base_tag + ":" + $php + "-" + $os)
+                  
+                  # Append the global :latest tag ONLY on the intersection of the maximum PHP and OS versions
+                  | if $php == $latest_php and $os == $latest_os then .tags = .tags + "\n" + $base_tag + ":latest" else . end
+                )
+              ')
+
+              FINAL_MATRIX=$(jq -c --argjson new "$ITERATION_MATRIX" '$new + .' <<< "$FINAL_MATRIX")
+            done
+          done
+
+          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Run Summary
+        run: |
+          echo "### 🚀 Dynamic Build Matrix Summary" >> $GITHUB_STEP_SUMMARY
+          echo "The dynamic matrix completed calculations. Below is the full breakdown of images scheduled to build in the next step:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "| Context Folder | Docker Stage Target | Registry Image & Tags |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+
+          echo '${{ steps.set-matrix.outputs.matrix }}' | jq -r '.[] | 
+            "| `\(.context)` | `\(if .target == "" then "N/A" else .target end)` | `\(.tags | split("\n") | join("` <br> `"))` |"' >> $GITHUB_STEP_SUMMARY
