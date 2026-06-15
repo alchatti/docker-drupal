@@ -5,7 +5,7 @@ WIP
 ```yml
 services:
   drupal-app:
-    image: alchatti/drupal-apache:latest
+    image: alchatti/drupal:apache
     environment:
       - DRUPAL_SUBDIR=${DRUPAL_SUBDIR}
     expose:
