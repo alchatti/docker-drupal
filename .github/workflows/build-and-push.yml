@@ -9,10 +9,6 @@ on:
       - '.gitignore'
       - 'LICENSE'
       - 'README*'
-      - 'CODE_OF_CONDUCT*'
-      - 'CONTRIBUTING*'
-      - 'SECURITY*'
-      - 'CHANGELOG*'
       - 'docs/**'
   workflow_dispatch:
 
@@ -21,75 +17,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Job 1: Call the simplified dynamic matrix backend
   prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Generate Centralized Matrix & Tags
-        id: set-matrix
-        run: |
-          DATE=$(date +'%Y%m%d')
-          NODE="24"
-          RUN_NUMBER="${{ github.run_number }}"
-          
-          # Dynamic Repository & Naming definitions
-          USER="${{ github.repository_owner }}"
-          REPO="${{ github.event.repository.name }}"
-          CLEAN_REPO="${REPO#docker-}" # Drops 'docker-' from 'docker-drupal' -> 'drupal'
-          
-          # Matrix Dimensions
-          PHP_VERSIONS=("8.2" "8.3" "8.4")
-          OS_VERSIONS=("bookworm" "trixie")
+    uses: alchatti/.github/.github/workflows/matrix-generator.yml@main
+    with:
+      php_versions: '["8.2", "8.3", "8.4"]'
+      os_versions: '["bookworm", "trixie"]'
+      blueprints: |
+        {
+          "builder": ["NODE=24"],
+          "fpm-apache": []
+        }
 
-          LATEST_PHP="${PHP_VERSIONS[-1]}"
-          LATEST_OS="${OS_VERSIONS[-1]}"
-          FINAL_MATRIX='[]'
-
-          for PHP in "${PHP_VERSIONS[@]}"; do
-            for OS in "${OS_VERSIONS[@]}"; do
-
-              # 1. Base args computed per iteration
-              BASE_ARGS='["PHP='"$PHP"'", "OS='"$OS"'", "CREATE_DATE='"$DATE"'", "VERSION=GHA-'"$RUN_NUMBER"'"]'
-
-              # 2. Key-Value Blueprint: Explicitly using empty arrays instead of null
-              BLUEPRINTS=$(cat <<EOF
-              {
-                "builder": ["NODE=${NODE}"],
-                "fpm-apache": []
-              }
-              EOF)
-
-              # 3. Direct array addition since .value is guaranteed to be an array
-              ITERATION_MATRIX=$(echo "$BLUEPRINTS" | jq -c \
-                --argjson base "$BASE_ARGS" \
-                --arg user "$USER" \
-                --arg repo "$CLEAN_REPO" \
-                --arg php "$PHP" \
-                --arg os "$OS" \
-                --arg date "$DATE" \
-                --arg latest_php "$LATEST_PHP" \
-                --arg latest_os "$LATEST_OS" '
-                to_entries | map(
-                  (.key) as $folder
-                  | {
-                      "context": ("./" + $folder),
-                      "build_args": (($base + .value) | join("\n"))
-                    }
-                  # Tag Naming Structure: user/cleanrepo-folder:php-os-date
-                  | ( $user + "/" + $repo + "-" + $folder ) as $base_tag
-                  | .tags = ($base_tag + ":" + $php + "-" + $os + "-" + $date)
-                  # Apply global :latest tag ONLY when both PHP and OS are the highest targets
-                  | if $php == $latest_php and $os == $latest_os then .tags = .tags + "\n" + $base_tag + ":latest" else . end
-                )
-              ')
-
-              FINAL_MATRIX=$(jq -c --argjson new "$ITERATION_MATRIX" '$new + .' <<< "$FINAL_MATRIX")
-            done
-          done
-
-          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
-
+  # Job 2: Consume the generated matrix seamlessly
   build:
     needs: prepare
     permissions:
@@ -106,3 +46,4 @@ jobs:
       build_args: ${{ matrix.build_args }}
       tags: ${{ matrix.tags }}
     secrets: inherit
+ 
