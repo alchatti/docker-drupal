@@ -2,10 +2,6 @@ name: Dynamic Matrix Generator
 
 on:
   workflow_call:
-    inputs:name: Dynamic Matrix Generator
-
-on:
-  workflow_call:
     inputs:
       php_versions:
         required: true
@@ -80,4 +76,4 @@ jobs:
             done
           done
 
-          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_ OUTPUT"
+          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
