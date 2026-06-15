@@ -4,7 +4,7 @@ ARG OS=bookworm
 FROM php:${PHP}-apache-${OS}
 
 # 1. Enable critical Apache modules early for Drupal .htaccess support
-RUN a2enmod rewrite alias
+RUN a2enmod rewrite alias expires
 
 # 2. Consolidated extension compilation & dependency management
 RUN set -eux; \
@@ -39,7 +39,6 @@ RUN set -eux; \
         opcache \
         pdo_mysql \
         pdo_pgsql \
-        soap \
         zip \
     ; \
     \
@@ -93,6 +92,13 @@ RUN chown -R www-data:www-data \
     /_config \
     /mnt/files \
     && chmod -R 755 /mnt/files
+
+RUN { \
+    echo 'opcache.memory_consumption=128'; \
+    echo 'opcache.interned_strings_buffer=8'; \
+    echo 'opcache.max_accelerated_files=4000'; \
+    echo 'opcache.revalidate_freq=60'; \
+} > /usr/local/etc/php/conf.d/opcache-recommended.ini
 
 # 9. Drop security privileges completely
 USER www-data
