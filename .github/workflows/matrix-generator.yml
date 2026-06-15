@@ -55,7 +55,6 @@ jobs:
                 --arg latest_php "$LATEST_PHP" \
                 --arg latest_os "$LATEST_OS" '
                 to_entries | map(
-                  # Split "fpm-apache@debug" into folder="fpm-apache" and target="debug"
                   (.key | split("@")) as $parts
                   | $parts[0] as $folder
                   | ($parts[1] // "") as $target
@@ -64,7 +63,6 @@ jobs:
                       "target": $target,
                       "build_args": (($base + .value) | join("\n"))
                     }
-                  # Standard jq approach: split by "@" and join back with "-"
                   | ($parts | join("-")) as $tag_suffix
                   | ( $user + "/" + $repo + "-" + $tag_suffix ) as $base_tag
                   | .tags = ($base_tag + ":" + $php + "-" + $os + "-" + $date)
@@ -77,3 +75,18 @@ jobs:
           done
 
           echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
+
+      # --- NEW STEP: Generate the GitHub Run Summary ---
+      - name: Generate Run Summary
+        run: |
+          echo "### 🚀 Dynamic Build Matrix Summary" >> $GITHUB_STEP_SUMMARY
+          echo "The dynamic matrix completed calculations. Below is the full breakdown of images scheduled to build in the next step:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Generate table header
+          echo "| Context Folder | Docker Stage Target | Registry Image & Tags |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+
+          # Use jq to format each matrix row directly into Markdown table rows
+          echo '${{ steps.set-matrix.outputs.matrix }}' | jq -r '.[] | 
+            "| `\(.context)` | `\(if .target == "" then "N/A" else .target end)` | `\(.tags | split("\n") | join("` <br> `"))` |"' >> $GITHUB_STEP_SUMMARY
