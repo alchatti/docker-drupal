@@ -30,12 +30,13 @@ jobs:
           
           USER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
+          # Clean 'docker-' prefix (e.g., 'docker-drupal' -> 'drupal')
           CLEAN_REPO="${REPO#docker-}"
 
           readarray -t PHP_ARR < <(echo '${{ inputs.php_versions }}' | jq -r '.[]')
           readarray -t OS_ARR < <(echo '${{ inputs.os_versions }}' | jq -r '.[]')
 
-          # Extract the highest elements to flag the global :latest tag
+          # Identify highest values to anchor the permanent shortcut variant tags
           LATEST_PHP=$(echo '${{ inputs.php_versions }}' | jq -r '.[-1]')
           LATEST_OS=$(echo '${{ inputs.os_versions }}' | jq -r '.[-1]')
           
@@ -64,14 +65,20 @@ jobs:
                       "target": $target,
                       "build_args": (($base + .value) | join("\n"))
                     }
-                  | ($parts | join("-")) as $tag_suffix
-                  | ( $user + "/" + $repo + "-" + $tag_suffix ) as $base_tag
                   
-                  # Primary tag structured precisely as php-os (e.g. 8.4-bookworm)
-                  | .tags = ($base_tag + ":" + $php + "-" + $os)
+                  # Base namespace definition (e.g., alchatti/drupal)
+                  | ( $user + "/" + $repo ) as $base_tag
                   
-                  # Append the global :latest tag ONLY on the intersection of the maximum PHP and OS versions
-                  | if $php == $latest_php and $os == $latest_os then .tags = .tags + "\n" + $base_tag + ":latest" else . end
+                  # Formulate variant modifier name
+                  | (if $target != "" then ($folder + "-" + $target) else $folder end) as $variant
+                  
+                  # 1. Primary standard track version tag
+                  | .tags = ($base_tag + ":" + $php + "-" + $variant + "-" + $os)
+                  
+                  # 2. Add permanent feature alias tags (No numbers, No OS, No "latest" keyword)
+                  | if $php == $latest_php and $os == $latest_os then 
+                      .tags = .tags + "\n" + $base_tag + ":" + $variant
+                    else . end
                 )
               ')
 
