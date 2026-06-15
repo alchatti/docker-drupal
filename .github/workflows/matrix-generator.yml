@@ -2,6 +2,10 @@ name: Dynamic Matrix Generator
 
 on:
   workflow_call:
+    inputs:name: Dynamic Matrix Generator
+
+on:
+  workflow_call:
     inputs:
       php_versions:
         required: true
@@ -64,8 +68,8 @@ jobs:
                       "target": $target,
                       "build_args": (($base + .value) | join("\n"))
                     }
-                  # Use the full entry key (with suffix if present) for the unique tag variant
-                  | (.key | replace("@"; "-")) as $tag_suffix
+                  # Standard jq approach: split by "@" and join back with "-"
+                  | ($parts | join("-")) as $tag_suffix
                   | ( $user + "/" + $repo + "-" + $tag_suffix ) as $base_tag
                   | .tags = ($base_tag + ":" + $php + "-" + $os + "-" + $date)
                   | if $php == $latest_php and $os == $latest_os then .tags = .tags + "\n" + $base_tag + ":latest" else . end
@@ -76,4 +80,4 @@ jobs:
             done
           done
 
-          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_ OUTPUT"
