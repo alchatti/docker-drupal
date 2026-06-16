@@ -42,7 +42,7 @@ jobs:
     
     uses: alchatti/.github/.github/workflows/docker-build-push.yml@main
     with:
-      context: ${{ matrix.context }}
+      context: .
       dockerfile: ${{ matrix.context }}/Dockerfile
       platforms: linux/amd64,linux/arm64
       build_args: ${{ matrix.build_args }}
