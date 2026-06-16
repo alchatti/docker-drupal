@@ -3,9 +3,8 @@ ARG OS=bookworm
 
 FROM php:${PHP}-apache-${OS}
 
-COPY --chmod=+x scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
-RUN /usr/local/bin/install-php-dependencies.sh \
-    && rm /usr/local/bin/install-php-dependencies.sh
+COPY --chmod=+x scripts/ /usr/local/bin/
+RUN install-php-dependencies.sh
 
 # 3. [Non-Root Setup] Shift Apache configuration to unprivileged port 8080 & update DocumentRoot
 RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
