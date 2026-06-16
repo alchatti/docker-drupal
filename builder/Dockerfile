@@ -29,7 +29,7 @@ LABEL org.opencontainers.image.title="PHP Builder" \
       org.opencontainers.image.created=$CREATE_DATE \
       org.opencontainers.image.version=$VERSION
 
-ENV NODE_VERSION=${NODE}
+ENV NODE=${NODE}
 
 # Composer from Official image
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
@@ -39,7 +39,7 @@ COPY --chmod=+x scripts/ /usr/local/bin/
 
 # System Dependencies, Ext Extensions, & NodeJS Core
 RUN install-php-dependencies.sh
-RUN install-builder-dependencies.sh "${NODE_VERSION}"
+RUN install-builder-dependencies.sh
 
 # Post-installation system verification
 RUN echo "Composer version: $(composer --version)" \
