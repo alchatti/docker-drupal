@@ -21,15 +21,8 @@ docker-php-ext-configure gd \
     --with-jpeg=/usr \
     --with-webp
 
-# 4. Compile robust core extensions using parallel hardware allocation
-docker-php-ext-install -j "$(nproc)" \
-    gd \
-    opcache \
-    pdo_mysql \
-    pdo_pgsql
-
-# 5. Compile the Zip extension SEQUENTIALLY (Fixes the 'install-modules' race condition)
-docker-php-ext-install zip
+# keeps hitting race conditions:
+docker-php-ext-install gd opcache pdo_mysql pdo_pgsql zip
 
 # 6. Garbage Collection Clean-up
 apt-mark auto '.*' > /dev/null
