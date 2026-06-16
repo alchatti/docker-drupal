@@ -3,57 +3,9 @@ ARG OS=bookworm
 
 FROM php:${PHP}-apache-${OS}
 
-RUN set -eux; \
-	\
-	if command -v a2enmod; then \
-# https://github.com/drupal/drupal/blob/d91d8d0a6d3ffe5f0b6dde8c2fbe81404843edc5/.htaccess (references both mod_expires and mod_rewrite explicitly)
-		a2enmod expires rewrite alias; \
-	fi; \
-	\
-	savedAptMark="$(apt-mark showmanual)"; \
-	\
-	apt-get update; \
-	apt-get install -y --no-install-recommends \
-		libfreetype6-dev \
-		libjpeg-dev \
-		libpng-dev \
-		libpq-dev \
-		libwebp-dev \
-		libzip-dev \
-        mariadb-client \
-        postgresql-client \
-	; \
-	\
-	docker-php-ext-configure gd \
-		--with-freetype \
-		--with-jpeg=/usr \
-		--with-webp \
-	; \
-	\
-	docker-php-ext-install -j "$(nproc)" \
-		gd \
-		pdo_mysql \
-		pdo_pgsql \
-		zip \
-    ; \
-    \
-    # Install PECL dependencies
-    pecl install redis; \
-    docker-php-ext-enable redis; \
-    \
-# reset apt-mark's "manual" list so that "purge --auto-remove" will remove all build dependencies
-	apt-mark auto '.*' > /dev/null; \
-	apt-mark manual $savedAptMark; \
-	ldd "$(php -r 'echo ini_get("extension_dir");')"/*.so \
-		| awk '/=>/ { so = $(NF-1); if (index(so, "/usr/local/") == 1) { next }; gsub("^/(usr/)?", "", so); printf "*%s\n", so }' \
-		| sort -u \
-		| xargs -r dpkg-query -S \
-		| cut -d: -f1 \
-		| sort -u \
-		| xargs -rt apt-mark manual; \
-	\
-	apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
-	rm -rf /var/lib/apt/lists/*
+COPY --chmod=+x scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
+RUN /usr/local/bin/install-php-dependencies.sh \
+    && rm /usr/local/bin/install-php-dependencies.sh
 
 # 3. [Non-Root Setup] Shift Apache configuration to unprivileged port 8080 & update DocumentRoot
 RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
