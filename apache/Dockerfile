@@ -3,6 +3,7 @@ ARG OS=bookworm
 
 FROM php:${PHP}-apache-${OS}
 
+# Custom Scripts & Entrypoint 
 COPY --chmod=+x scripts/ /usr/local/bin/
 RUN install-php-dependencies.sh
 
@@ -26,9 +27,6 @@ WORKDIR /var/www/html
 # 6. Global Drush Shortcut (Will hook natively once composer installs app files)
 #RUN ln -s /var/www/html/vendor/bin/drush /usr/local/bin/drush
 ENV PATH="/var/www/html/vendor/bin:${PATH}"
-
-# 7. Copy Custom Entrypoint
-COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # 8. Standardize file system ownership under non-root user
 RUN chown -R www-data:www-data \
