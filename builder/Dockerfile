@@ -46,8 +46,8 @@ RUN echo "Composer version: $(composer --version)" \
     && echo "Node.js version: $(node --version)" \
     && echo "NPM version: $(npm --version)"
     
-COPY --chmod=+x cleanup-build.php /usr/local/bin/cleanup-build
-COPY cleanup.json /usr/local/bin/cleanup.json
+COPY --chmod=+x ./cleanup-build.php /usr/local/bin/cleanup-build
+COPY ./cleanup.json /usr/local/bin/cleanup.json
 
 WORKDIR /app
 CMD ["bash"]
