@@ -4,7 +4,7 @@ set -euxo pipefail
 # 1. Save original manual package markers
 savedAptMark="$(apt-mark showmanual)"
 
-# 2. Install shared system headers needed for standard PHP extensions
+# 2. Install shared system headers
 apt-get update
 apt-get install -y --no-install-recommends \
     libfreetype6-dev \
@@ -21,15 +21,17 @@ docker-php-ext-configure gd \
     --with-jpeg=/usr \
     --with-webp
 
-# 4. Compile core extensions using parallel hardware allocation properties
+# 4. Compile robust core extensions using parallel hardware allocation
 docker-php-ext-install -j "$(nproc)" \
     gd \
     opcache \
     pdo_mysql \
-    pdo_pgsql \
-    zip
+    pdo_pgsql
 
-# 5. Garbage Collection Clean-up
+# 5. Compile the Zip extension SEQUENTIALLY (Fixes the 'install-modules' race condition)
+docker-php-ext-install zip
+
+# 6. Garbage Collection Clean-up
 apt-mark auto '.*' > /dev/null
 apt-mark manual $savedAptMark
 
