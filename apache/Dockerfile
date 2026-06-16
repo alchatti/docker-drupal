@@ -3,10 +3,10 @@ ARG OS=bookworm
 
 FROM php:${PHP}-apache-${OS}
 
-# 1. Custom Scripts & Core OS Setup
-# Expecting docker-entrypoint.sh to be inside scripts/ along with install-php-dependencies.sh
+# 1. Install Scripts & Entrypoint
 COPY --chmod=+x scripts/ /usr/local/bin/
 RUN install-php-dependencies.sh
+RUN install-runtimes.sh 
 
 # 2. [Non-Root Setup] Shift Apache to unprivileged port 8080 & update DocumentRoot
 RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
