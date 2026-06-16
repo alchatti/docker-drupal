@@ -29,47 +29,23 @@ LABEL org.opencontainers.image.title="PHP Builder" \
       org.opencontainers.image.created=$CREATE_DATE \
       org.opencontainers.image.version=$VERSION
 
-ENV NODE=${NODE}
+ENV NODE_VERSION=${NODE}
 
 # Composer from Official image
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
-# System Dependencies, Ext Extensions, & NodeJS Core 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    unzip \
-    ca-certificates \
-    bash \
-    libfreetype6-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libpq-dev \
-    libwebp-dev \
-    libzip-dev \
-    curl \
-    gnupg \
-    && docker-php-ext-configure gd \
-        --with-freetype \
-        --with-jpeg=/usr \
-        --with-webp \
-    && docker-php-ext-install -j "$(nproc)" \
-        gd \
-        pdo_mysql \
-        pdo_pgsql \
-        zip \
-    # Modern Nodesource installation syntax (Avoids executing unverified scripts straight via curl)
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update && apt-get install -y nodejs \
-    # Post-installation system verification
-    && echo "Composer version: $(composer --version)" \
-    && echo "Node.js version: $(node --version)" \
-    && echo "NPM version: $(npm --version)" \
-    # Aggressive image size cleanup
-    && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false gnupg \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# Copy all scripts to /usr/local/bin/ with execution permissions
+COPY --chmod=+x scripts/ /usr/local/bin/
 
+# System Dependencies, Ext Extensions, & NodeJS Core
+RUN install-php-dependencies.sh
+RUN install-builder-dependencies.sh "${NODE_VERSION}"
+
+# Post-installation system verification
+RUN echo "Composer version: $(composer --version)" \
+    && echo "Node.js version: $(node --version)" \
+    && echo "NPM version: $(npm --version)"
+    
 COPY --chmod=+x cleanup-build.php /usr/local/bin/cleanup-build
 COPY cleanup.json /usr/local/bin/cleanup.json
 
