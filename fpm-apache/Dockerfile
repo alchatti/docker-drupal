@@ -5,38 +5,14 @@ FROM serversideup/php:${PHP}-fpm-apache-${OS}
 
 USER root
 
-RUN apt-get update \
-  && apt install -y --no-install-recommends \
-  unzip \
-  ca-certificates \
-  bash \
-  libfreetype6-dev \
-  libjpeg-dev \
-  libpng-dev \
-  libpq-dev \
-  libwebp-dev \
-  libzip-dev \
-  mariadb-client \
-  postgresql-client \
-  ; \
-  \
-  docker-php-ext-configure gd \
-  --with-freetype \
-  --with-jpeg=/usr \
-  --with-webp \
-  ; \
-  \
-  docker-php-ext-install -j "$(nproc)" \
-  gd \
-  pdo_mysql \
-  pdo_pgsql \
-  zip \
-  ; \
-  pecl install redis \
-  && docker-php-ext-enable redis \
-  ; \
-  apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
+# 1. Install scripts
+COPY --chmod=+x scripts/ /usr/local/bin/
+
+# 2. Install PHP dependencies and runtime tools
+RUN install-php-dependencies.sh
+RUN install-runtimes.sh --mariadb
+
+ENV PATH="/var/www/html/vendor/bin:${PATH}"
 
 # Drupal production-friendly PHP settings
 RUN { \
