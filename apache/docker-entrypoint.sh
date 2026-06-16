@@ -7,10 +7,11 @@ set -euo pipefail
 echo "[system-init] Starting Drupal Container Initialization (Non-Root Runtime Mode)"
 
 # --- 1. Intercept CLI Commands and Skip Web Server Configuration ---
-# If the user passed an explicit command that is NOT starting Apache (e.g., drush, bash, php),
-# skip the entire Apache config engine and run the command instantly.
-if [ "$1" != 'apache2-foreground' ]; then
-    echo "[system-init] Bypassing webserver initialization to run standalone command: $@"
+# Safely capture the first argument even if it's completely empty (prevents unbound variable errors)
+FIRST_ARG="${1:-}"
+
+if [ "$FIRST_ARG" != 'apache2-foreground' ]; then
+    echo "[system-init] Bypassing webserver initialization to run standalone command: $*"
     exec "$@"
 fi
 
@@ -24,10 +25,10 @@ fi
 : "${PHP_MAX_ACCEL_FILES:=50000}"
 : "${PHP_VALIDATE_TIMESTAMPS:=0}"
 
-# Apache Tuning
+# Apache Tuning (Optimized for Prefork Process Model)
 : "${APACHE_START_SERVERS:=2}"
-: "${APACHE_SERVER_LIMIT:=32}"
-: "${APACHE_THREADS_PER_CHILD:=25}"
+: "${APACHE_MIN_SPARE_SERVERS:=2}"
+: "${APACHE_MAX_SPARE_SERVERS:=10}"
 : "${APACHE_MAX_CONNECTIONS_PER_CHILD:=5000}"
 
 # App Details
@@ -96,7 +97,7 @@ MAX_PHP_THREADS=$(( (PHP_BUDGET_MB - OPCACHE_MB - HEADROOM_MB) / AVG_PHP_THREAD_
 (( MAX_PHP_THREADS < MIN_PHP_THREADS )) && MAX_PHP_THREADS=$MIN_PHP_THREADS
 (( MAX_PHP_THREADS > MAX_PHP_THREADS_CAP )) && MAX_PHP_THREADS=$MAX_PHP_THREADS_CAP
 
-# Synchronize Apache MaxRequestWorkers to match total calculated memory threads
+# For mpm_prefork, MaxRequestWorkers determines total concurrent web processes allowed
 APACHE_MRW=$MAX_PHP_THREADS
 
 echo "[system-init] Profile Auto-tuned: TOTAL=${TOTAL_MB}MB | PHP_BUDGET=${PHP_BUDGET_MB}MB | memory_limit=${PHP_MEMORY_LIMIT_MB}M | opcache=${OPCACHE_MB}M | apache_max_workers=${APACHE_MRW}"
@@ -117,16 +118,17 @@ opcache.validate_timestamps=${PHP_VALIDATE_TIMESTAMPS}
 ${TZ_SETTING}
 EOF
 
-# Generate Core Apache Worker Layout configurations
+# Generate Core Apache Worker Layout configurations targeting mpm_prefork
 cat > /_config/apache-mpm.conf << EOF
 # Security Headers
 ServerTokens Prod
 ServerSignature Off
 
-<IfModule mpm_event_module>
+<IfModule mpm_prefork_module>
     StartServers             ${APACHE_START_SERVERS}
-    ServerLimit              ${APACHE_SERVER_LIMIT}
-    ThreadsPerChild          ${APACHE_THREADS_PER_CHILD}
+    MinSpareServers          ${APACHE_MIN_SPARE_SERVERS}
+    MaxSpareServers          ${APACHE_MAX_SPARE_SERVERS}
+    ServerLimit              ${APACHE_MRW}
     MaxRequestWorkers        ${APACHE_MRW}
     MaxConnectionsPerChild   ${APACHE_MAX_CONNECTIONS_PER_CHILD}
 </IfModule>
@@ -134,5 +136,5 @@ EOF
 
 echo "[system-init] Real-time calculations finalized. Handing command over to Apache executable."
 
-# Execute the core webserver process (apache2-foreground) safely
+# Execute core webserver process safely
 exec "$@"
