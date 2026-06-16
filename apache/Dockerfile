@@ -6,7 +6,7 @@ FROM php:${PHP}-apache-${OS}
 # 1. Install Scripts & Entrypoint
 COPY --chmod=+x scripts/ /usr/local/bin/
 RUN install-php-dependencies.sh
-RUN install-runtimes.sh 
+RUN install-runtimes.sh --mariadb
 
 # 2. [Non-Root Setup] Shift Apache to unprivileged port 8080 & update DocumentRoot
 RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
