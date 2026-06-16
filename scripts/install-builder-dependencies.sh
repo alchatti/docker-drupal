@@ -1,65 +1,38 @@
 #!/usr/bin/env bash
-set -Eeuxo pipefail
+set -euo pipefail
 
-NODE_VERSION="${1:-20}"
+# install-builder-tools.sh
+#
+# This script is intended to run AFTER install-drupal-php-extensions.sh
+#
+# Required environment variable:
+#   NODE=22
+#   NODE=24
+#   etc.
 
-echo "[builder-init] Installing builder tools..."
+set -x
 
-. /etc/os-release
+if [ -z "${NODE:-}" ]; then
+    echo "ERROR: NODE version is not set."
+    echo "Example: NODE=22 ./install-builder-tools.sh"
+    exit 1
+fi
 
 apt-get update
 
 apt-get install -y --no-install-recommends \
+    unzip \
     ca-certificates \
-    curl \
-    git \
-    unzip
+    bash \
+    curl
 
-# Debian 13 / trixie path: avoid NodeSource repository surprises.
-if [ "${VERSION_CODENAME:-}" = "trixie" ]; then
-    echo "[builder-init] Detected Debian trixie; installing Node.js from Debian repositories."
+curl -fsSL "https://deb.nodesource.com/setup_${NODE}.x" | bash -
 
-    apt-get install -y --no-install-recommends \
-        nodejs \
-        npm
-else
-    case "${NODE_VERSION}" in
-        ''|*[!0-9]*)
-            echo "[builder-init] ERROR: NODE_VERSION must be a numeric major version, e.g. 20 or 22." >&2
-            exit 1
-            ;;
-    esac
+apt-get install -y --no-install-recommends \
+    nodejs
 
-    echo "[builder-init] Installing Node.js ${NODE_VERSION}.x from NodeSource..."
+echo "Composer version: $(composer --version)"
+echo "Node.js version: $(node --version)"
+echo "NPM version: $(npm --version)"
 
-    apt-get install -y --no-install-recommends \
-        gnupg
-
-    install -d -m 0755 /usr/share/keyrings
-
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg
-
-    chmod a+r /usr/share/keyrings/nodesource.gpg
-
-    echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_VERSION}.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list
-
-    apt-get update
-
-    apt-get install -y --no-install-recommends \
-        nodejs
-
-    apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false gnupg
-fi
-
-echo "[builder-init] Installed versions:"
-node --version
-npm --version
-git --version
-unzip -v | head -n 1
-
-rm -rf \
-    /var/lib/apt/lists/* \
-    /tmp/* \
-    /var/tmp/*
+rm -rf /var/lib/apt/lists/*
