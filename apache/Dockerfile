@@ -8,6 +8,7 @@ COPY --chmod=+x scripts/ /usr/local/bin/
 
 # Install PHP dependencies and runtime tools
 RUN install-php-dependencies.sh
+#TODO: Switch this base & variants stage builds
 RUN install-runtimes.sh --mariadb
 
 # Configure Apache + Drupal runtime
