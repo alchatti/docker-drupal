@@ -35,6 +35,7 @@ WORKDIR /var/www/html
 USER www-data
 
 EXPOSE 8080
+VOLUME ["/mnt/files"]
 
 # Configure Docker to run the healthcheck
 # Note: Adjust start-period if your container runs database updates on startup
