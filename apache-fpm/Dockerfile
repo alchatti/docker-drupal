@@ -84,4 +84,4 @@ HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
   CMD ["healthcheck.sh"]
 
 ENTRYPOINT ["docker-entrypoint-apache-fpm.sh"]
-CMD ["apache2-foreground"]
+CMD ["/init"]
