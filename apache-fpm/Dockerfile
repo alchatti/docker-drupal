@@ -35,9 +35,9 @@ COPY --chmod=+x scripts/ /usr/local/bin/
 # Copy s6-overlay from s6-build
 COPY --from=s6-build /opt/s6/ /
 
-# Create runtime dirs with www-data ownership
-RUN mkdir -p /_config /var/run/php /var/www/html /mnt/files \
-  chown -R www-data:www-data /_config /var/run/php /var/www/html /mnt/files /\
+# Create PHP runtime dirs with www-data ownership
+RUN mkdir -p /var/run/php \
+  chown -R www-data:www-data /var/run/php
 
 # 4. Create the PHP-FPM socket configuration
 RUN cat << 'EOF' > /usr/local/etc/php-fpm.d/zz-docker.conf
