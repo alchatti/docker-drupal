@@ -38,7 +38,7 @@ EXPOSE 8080
 # Configure Docker to run the healthcheck
 # Note: Adjust start-period if your container runs database updates on startup
 HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["docker-healthcheck"]
+  CMD ["healthcheck.sh"]
 
 ENTRYPOINT ["docker-entrypoint-apache.sh"]
 CMD ["apache2-foreground"]
