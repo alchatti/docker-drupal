@@ -24,12 +24,30 @@ RUN set -eux; \
 #! Image Build
 FROM ${BASE_IMAGE}
 
-# copy s6-overlay from s6-build
-COPY --from=s6-build /opt/s6/ /
-
+# 1. Install Apache
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    apache2 \
+    && rm -rf /var/lib/apt/lists/*
+    
 # Copy scripts
 COPY --chmod=+x scripts/ /usr/local/bin/
 
+# Copy s6-overlay from s6-build
+COPY --from=s6-build /opt/s6/ /
+
+# Create runtime dirs with www-data ownership
+RUN mkdir -p /_config /var/run/php /var/www/html /mnt/files \
+  chown -R www-data:www-data /_config /var/run/php /var/www/html /mnt/files /\
+
+# 4. Create the PHP-FPM socket configuration
+RUN cat << 'EOF' > /usr/local/etc/php-fpm.d/zz-docker.conf
+[www]
+listen = /var/run/php/php-fpm.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+EOF
+ 
 # Install PHP dependencies and runtime tools
 RUN install-php-dependencies.sh
 #TODO: Switch this base & variants stage builds
