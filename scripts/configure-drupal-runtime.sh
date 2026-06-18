@@ -3,26 +3,8 @@ set -euo pipefail
 
 # configure-drupal-runtime.sh
 #
-# Shared Drupal runtime setup for:
-# - php:*apache images
-# - custom Apache + PHP-FPM images
-#
-# Handles:
-# - Apache port change to non-root port 8080
-# - Apache DocumentRoot to /var/www/html/web
-# - Apache modules: rewrite, alias, expires
-# - Apache runtime include directory: /_config/apache/*.conf
-# - PHP runtime ini directory: /_config/php/*.ini
-# - Recommended PHP ini settings
-# - Drupal persistent file directories
-# - Apache runtime directories
-# - Ownership for non-root Apache execution
-#
-# This script intentionally does NOT configure:
-# - PHP-FPM pools
-# - Apache proxy_fcgi / SetHandler
-# - mod_php-specific settings
-# - s6 services
+# Shared Drupal runtime setup for ROOTLESS Apache + PHP-FPM images
+# Handles environment variable injection inside a rootless container.
 
 set -x
 
@@ -44,7 +26,6 @@ APACHE_DEFAULT_SITE="${APACHE_DEFAULT_SITE:-/etc/apache2/sites-available/000-def
 APACHE_MAIN_CONF="${APACHE_MAIN_CONF:-/etc/apache2/apache2.conf}"
 
 # Enable common Apache modules used by Drupal.
-# Note: Apache module name is "expires", not "expire".
 if command -v a2enmod >/dev/null 2>&1; then
     a2enmod rewrite alias expires
 fi
@@ -58,52 +39,55 @@ sed -i "s/<VirtualHost \*:80>/<VirtualHost *:${APACHE_PORT}>/g" "${APACHE_DEFAUL
 # Set Drupal-style document root.
 sed -i "s|/var/www/html|${DOC_ROOT}|g" "${APACHE_DEFAULT_SITE}"
 
-# Create Apache and PHP config directories.
-mkdir -p \
-    "${APACHE_CONFIG_DIR}" \
-    "${PHP_CONFIG_DIR}"
+# Create Apache and PHP config directories using brace expansion
+mkdir -p "${CONFIG_ROOT}/{apache,php}"
 
 touch \
     "${APACHE_CONFIG_DIR}/apache-mpm.conf" \
     "${APACHE_CONFIG_DIR}/drupal-runtime.conf"
 
-# Add optional Apache include directory only once.
+# Add optional Apache include directory only once (Using echo to extend)
 grep -qxF "IncludeOptional ${APACHE_CONFIG_DIR}/*.conf" "${APACHE_MAIN_CONF}" \
     || echo "IncludeOptional ${APACHE_CONFIG_DIR}/*.conf" >> "${APACHE_MAIN_CONF}"
 
-# Recommended PHP runtime settings.
-{
-    echo 'opcache.memory_consumption=128'
-    echo 'opcache.interned_strings_buffer=8'
-    echo 'opcache.max_accelerated_files=4000'
-    echo 'opcache.revalidate_freq=60'
-} > "${PHP_CONFIG_DIR}/opcache-recommended.ini"
+# Recommended PHP runtime settings (Using cat to generate)
+cat << 'EOF' > "${PHP_CONFIG_DIR}/opcache-recommended.ini"
+opcache.memory_consumption=128
+opcache.interned_strings_buffer=8
+opcache.max_accelerated_files=4000
+opcache.revalidate_freq=60
+EOF
 
-{
-    echo 'output_buffering=true'
-} > "${PHP_CONFIG_DIR}/docker-php-drupal-recommended.ini"
+cat << 'EOF' > "${PHP_CONFIG_DIR}/docker-php-drupal-recommended.ini"
+output_buffering=true
+EOF
 
-# Create Drupal persistent/runtime directories.
-mkdir -p \
-    "${FILES_DIR}/public" \
-    "${FILES_DIR}/private" \
-    "${FILES_DIR}/tmp" \
-    "${FILES_DIR}/config/sync"
+# Create Drupal persistent/runtime directories using brace expansion
+mkdir -p "${FILES_DIR}/{public,private,tmp,config/sync}"
 
-# Ensure Apache runtime directories exist.
-mkdir -p \
-    /var/run/apache2 \
-    /var/lock/apache2 \
-    /var/log/apache2
+# Ensure Apache runtime directories exist using brace expansion
+mkdir -p /var/{run,lock,log}/apache2
 
-# Standardize ownership for non-root Apache execution.
+# ==============================================================================
+# Rootless Ownership and Permissions Allocation
+# ==============================================================================
+
+# Explicitly ensure everything belongs to www-data so the rootless engine can 
+# modify configs, rewrite logs, and manage sockets at boot.
 chown -R "${APACHE_USER}:${APACHE_GROUP}" \
     "${APP_ROOT}" \
+    "${CONFIG_ROOT}" \
+    "${FILES_DIR}" \
     /var/run/apache2 \
     /var/lock/apache2 \
     /var/log/apache2 \
-    "${CONFIG_ROOT}" \
-    "${FILES_DIR}" \
     /etc/apache2
 
-chmod -R 755 "${FILES_DIR}"
+# Permissions layout:
+# Allow www-data complete control inside its assigned directories 
+chmod -R 755 "${CONFIG_ROOT}"
+chmod -R 755 "${APP_ROOT}"
+chmod -R 755 /etc/apache2
+
+# Give Drupal assets and Apache locks fully open group permissions if mapped volume scaling is needed
+chmod -R 775 "${FILES_DIR}"
