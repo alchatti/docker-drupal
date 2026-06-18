@@ -50,16 +50,20 @@ touch \
 grep -qxF "IncludeOptional ${APACHE_CONFIG_DIR}/*.conf" "${APACHE_MAIN_CONF}" \
     || echo "IncludeOptional ${APACHE_CONFIG_DIR}/*.conf" >> "${APACHE_MAIN_CONF}"
 
-# Recommended PHP runtime settings (Using cat to generate)
-cat << 'EOF' > "${PHP_CONFIG_DIR}/opcache-recommended.ini"
-opcache.memory_consumption=128
-opcache.interned_strings_buffer=8
-opcache.max_accelerated_files=4000
-opcache.revalidate_freq=60
-EOF
-
+# Custom Drupal Production & Runtime Engine optimizations
 cat << 'EOF' > "${PHP_CONFIG_DIR}/docker-php-drupal-recommended.ini"
 output_buffering=true
+memory_limit=256M
+upload_max_filesize=64M
+post_max_size=64M
+max_execution_time=120
+opcache.enable=1
+opcache.enable_cli=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=20000
+opcache.validate_timestamps=0
+opcache.revalidate_freq=60
 EOF
 
 # Create Drupal persistent/runtime directories using brace expansion
