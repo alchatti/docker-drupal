@@ -65,8 +65,10 @@ EOF
 # Create Drupal persistent/runtime directories using brace expansion
 mkdir -p "${FILES_DIR}/{public,private,tmp,config/sync}"
 
-# Ensure Apache runtime directories exist using brace expansion
-mkdir -p /var/{run,lock,log}/apache2
+# Ensure APP_ROOT (/var/www/html) and Apache runtime directories exist
+mkdir -p \
+    "${APP_ROOT}" \
+    /var/{run,lock,log}/apache2
 
 # ==============================================================================
 # Rootless Ownership and Permissions Allocation
