@@ -15,6 +15,7 @@ savedAptMark="$(apt-mark showmanual)"
 
 apt-get update
 apt-get install -y --no-install-recommends \
+    unzip \
     libfreetype6-dev \
     libicu-dev \
     libjpeg62-turbo-dev \
