@@ -30,6 +30,7 @@ COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
 # Copy script to /usr/local/bin/ with execution permissions
 COPY --chmod=+x scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
+COPY --chmod=+x scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 
 # Install Node.js from official Node.js binary tarball, then install PHP deps
 RUN set -eux; \
