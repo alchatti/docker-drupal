@@ -1,27 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Global Environment Variable
-cd "$DOC_ROOT"
+APACHE_PORT="${APACHE_PORT:-8080}"
+HEALTHCHECK_PATH="${HEALTHCHECK_PATH:-/}"
+DOC_ROOT="${DOC_ROOT:-/var/www/html/web}"
 
-# 1. Verify Drupal can bootstrap
-if ! drush status --format=json 2>/dev/null | grep -q '"bootstrap": "Successful"'; then
-  echo "Healthcheck failed: Drupal failed to bootstrap." >&2
-  exit 1
+curl -fsSL --max-time 4 "http://127.0.0.1:${APACHE_PORT}${HEALTHCHECK_PATH}" >/dev/null
+
+# Optional deep Drupal/DB check. Keep disabled by default to avoid restarting
+# a healthy web container during DB maintenance or Drupal update windows.
+if [ "${HEALTHCHECK_DEEP:-0}" = "1" ]; then
+    cd "${DOC_ROOT}"
+
+    if ! command -v drush >/dev/null 2>&1; then
+        echo "Healthcheck failed: drush not found." >&2
+        exit 1
+    fi
+
+    if ! drush status --format=json 2>/dev/null | grep -q '"bootstrap": "Successful"'; then
+        echo "Healthcheck failed: Drupal failed to bootstrap." >&2
+        exit 1
+    fi
+
+    if ! drush sql:query "SELECT 1;" >/dev/null 2>&1; then
+        echo "Healthcheck failed: database SELECT verification failed." >&2
+        exit 1
+    fi
 fi
-
-# 2. Live Database Verification: Force a SELECT query through Drush
-# This ensures the DB user has active permissions and the engine is responding.
-if ! drush sql:query "SELECT 1;" &> /dev/null; then
-  echo "Healthcheck failed: Database connection select verification failed." >&2
-  exit 1
-fi
-
-# 3. Web Routing Verification: Ensure HTTP traffic is successfully serving
-if ! curl -fs http://localhost:8080/ > /dev/null; then
-  echo "Healthcheck failed: Web server is not responding to HTTP requests." >&2
-  exit 1
-fi
-
-# All checks passed successfully
-exit 0

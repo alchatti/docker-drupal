@@ -1,55 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[s6-setup] Generating s6-overlay v3 service definitions for Apache and PHP-FPM..."
+# Build-time generation of s6-overlay v3 service definitions.
 
-# Base directory for s6-overlay user configuration
-S6_DIR="/etc/s6-overlay/s6-rc.d"
+set -x
 
-# Create directories for both services using brace expansion
-mkdir -p "${S6_DIR}"/{apache/dependencies.d,php-fpm}
+S6_DIR="${S6_DIR:-/etc/s6-overlay/s6-rc.d}"
 
-# ------------------------------------------------------------------------------
-# PHP-FPM Service Configuration
-# ------------------------------------------------------------------------------
-cat << 'EOF' > "${S6_DIR}/php-fpm/type"
+mkdir -p \
+    "${S6_DIR}/php-fpm" \
+    "${S6_DIR}/apache/dependencies.d" \
+    "${S6_DIR}/user/contents.d"
+
+cat > "${S6_DIR}/php-fpm/type" <<'EOF_TYPE'
 longrun
-EOF
+EOF_TYPE
 
-cat << 'EOF' > "${S6_DIR}/php-fpm/run"
-#!/bin/sh
-# Execute PHP-FPM in the foreground
+cat > "${S6_DIR}/php-fpm/run" <<'EOF_RUN'
+#!/command/with-contenv sh
+set -eu
 exec php-fpm -F
-EOF
+EOF_RUN
 
-# ------------------------------------------------------------------------------
-# Apache Service Configuration
-# ------------------------------------------------------------------------------
-cat << 'EOF' > "${S6_DIR}/apache/type"
+cat > "${S6_DIR}/apache/type" <<'EOF_TYPE'
 longrun
-EOF
+EOF_TYPE
 
-cat << 'EOF' > "${S6_DIR}/apache/run"
-#!/bin/sh
-# Flush stale PID file if container restarted uncleanly
+cat > "${S6_DIR}/apache/run" <<'EOF_RUN'
+#!/command/with-contenv sh
+set -eu
 rm -f /var/run/apache2/apache2.pid
-
-# Source Apache environment variables and start in foreground
 . /etc/apache2/envvars
 exec apache2 -D FOREGROUND
-EOF
+EOF_RUN
 
-# ------------------------------------------------------------------------------
-# Define Dependency: Apache requires PHP-FPM socket to exist before starting
-# ------------------------------------------------------------------------------
 touch "${S6_DIR}/apache/dependencies.d/php-fpm"
-
-# ------------------------------------------------------------------------------
-# Add to the 'user' bundle
-# ------------------------------------------------------------------------------
-# In s6 v3, user-defined services must belong to the 'user' or 'default' bundle
-mkdir -p "${S6_DIR}/user/contents.d"
-touch "${S6_DIR}/user/contents.d/apache"
 touch "${S6_DIR}/user/contents.d/php-fpm"
+touch "${S6_DIR}/user/contents.d/apache"
 
-echo "[s6-setup] s6-overlay architecture generation complete."
+chmod +x "${S6_DIR}/php-fpm/run" "${S6_DIR}/apache/run"
+
+echo "[s6-setup] Generated s6 services: php-fpm, apache."
