@@ -25,10 +25,13 @@ jobs:
       os_versions: '["trixie"]'
       blueprints: |
         {
-          "builder": ["NODE=24"],
-          "fpm-apache": [],
-          "apache":[],
-          "apache-fpm": []
+          "builder": {
+            "build_args": ["NODE=24"],
+            "test_command": "docker run --rm \"$IMAGE\" verify-builder-tools.sh"
+          },
+          "fpm-apache": {},
+          "apache": {},
+          "apache-fpm": {}
         }
 
   # Job 2: Process single and multi-stage builds concurrently
@@ -49,6 +52,10 @@ jobs:
       build_args: ${{ matrix.build_args }}
       tags: ${{ matrix.tags }}
       target: ${{ matrix.target }}
+      # Optional image verification, empty when not defined in the blueprint.
+      test_command: ${{ matrix.test_command }}
+      test_platform: linux/amd64
+      test_image_tag: local/${{ matrix.context }}-${{ matrix.target }}:test
       # Explicitly pass cache configurations to the backend
       cache_from: type=gha,scope=${{ matrix.context }}-${{ matrix.target }}
       cache_to: type=gha,mode=max,scope=${{ matrix.context }}-${{ matrix.target }}
