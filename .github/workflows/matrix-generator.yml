@@ -21,25 +21,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+
     steps:
       - name: Compute Matrix Permutations
         id: set-matrix
+        shell: bash
         run: |
+          set -euo pipefail
+
           DATE=$(date +'%Y%m%d')
           RUN_NUMBER="${{ github.run_number }}"
-          
+
           USER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-          # Clean 'docker-' prefix (e.g., 'docker-drupal' -> 'drupal')
+
+          # Clean 'docker-' prefix, for example:
+          # docker-drupal -> drupal
           CLEAN_REPO="${REPO#docker-}"
 
           readarray -t PHP_ARR < <(echo '${{ inputs.php_versions }}' | jq -r '.[]')
           readarray -t OS_ARR < <(echo '${{ inputs.os_versions }}' | jq -r '.[]')
 
-          # Identify highest values to anchor the permanent shortcut variant tags
           LATEST_PHP=$(echo '${{ inputs.php_versions }}' | jq -r '.[-1]')
           LATEST_OS=$(echo '${{ inputs.os_versions }}' | jq -r '.[-1]')
-          
+
           FINAL_MATRIX='[]'
 
           for PHP in "${PHP_ARR[@]}"; do
@@ -53,49 +58,68 @@ jobs:
                 --arg repo "$CLEAN_REPO" \
                 --arg php "$PHP" \
                 --arg os "$OS" \
-                --arg date "$DATE" \
                 --arg latest_php "$LATEST_PHP" \
                 --arg latest_os "$LATEST_OS" '
                 to_entries | map(
                   (.key | split("@")) as $parts
                   | $parts[0] as $folder
                   | ($parts[1] // "") as $target
+                  | .value as $blueprint
+
+                  | if ($blueprint | type) != "object" then
+                      error("Blueprint value for " + .key + " must be an object")
+                    else
+                      .
+                    end
+
+                  | ($blueprint.build_args // []) as $extra_args
+                  | ($blueprint.test_command // "") as $test_command
+
                   | {
                       "context": ("./" + $folder),
                       "target": $target,
-                      "build_args": (($base + .value) | join("\n"))
+                      "build_args": (($base + $extra_args) | join("\n")),
+                      "test_command": $test_command
                     }
-                  
-                  # Base namespace definition (e.g., alchatti/drupal)
-                  | ( $user + "/" + $repo ) as $base_tag
-                  
-                  # Formulate variant modifier name
-                  | (if $target != "" then ($folder + "-" + $target) else $folder end) as $variant
-                  
-                  # 1. Primary standard track version tag
+
+                  | ($user + "/" + $repo) as $base_tag
+
+                  | (
+                      if $target != "" then
+                        ($folder + "-" + $target)
+                      else
+                        $folder
+                      end
+                    ) as $variant
+
                   | .tags = ($base_tag + ":" + $php + "-" + $variant + "-" + $os)
-                  
-                  # 2. Add permanent feature alias tags (No numbers, No OS, No "latest" keyword)
-                  | if $php == $latest_php and $os == $latest_os then 
+
+                  | if $php == $latest_php and $os == $latest_os then
                       .tags = .tags + "\n" + $base_tag + ":" + $variant
-                    else . end
+                    else
+                      .
+                    end
                 )
               ')
 
-              FINAL_MATRIX=$(jq -c --argjson new "$ITERATION_MATRIX" '$new + .' <<< "$FINAL_MATRIX")
+              FINAL_MATRIX=$(jq -c --argjson new "$ITERATION_MATRIX" '. + $new' <<< "$FINAL_MATRIX")
             done
           done
 
           echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
 
       - name: Generate Run Summary
+        shell: bash
         run: |
-          echo "### 🚀 Dynamic Build Matrix Summary" >> $GITHUB_STEP_SUMMARY
-          echo "The dynamic matrix completed calculations. Below is the full breakdown of images scheduled to build in the next step:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "| Context Folder | Docker Stage Target | Registry Image & Tags |" >> $GITHUB_STEP_SUMMARY
-          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          set -euo pipefail
 
-          echo '${{ steps.set-matrix.outputs.matrix }}' | jq -r '.[] | 
-            "| `\(.context)` | `\(if .target == "" then "N/A" else .target end)` | `\(.tags | split("\n") | join("` <br> `"))` |"' >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Dynamic Build Matrix Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "The dynamic matrix completed calculations. Below is the full breakdown of images scheduled to build in the next step:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Context Folder | Docker Stage Target | Test Enabled | Registry Image & Tags |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| :--- | :--- | :--- | :--- |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo '${{ steps.set-matrix.outputs.matrix }}' | jq -r '.[] |
+            "| `\(.context)` | `\(if .target == "" then "N/A" else .target end)` | `\(if .test_command == "" then "No" else "Yes" end)` | `\(.tags | split("\n") | join("` <br> `"))` |"
+          ' >> "$GITHUB_STEP_SUMMARY"
