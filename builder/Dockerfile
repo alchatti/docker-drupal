@@ -34,7 +34,12 @@ COPY --chmod=+x scripts/install-php-dependencies.sh /usr/local/bin/install-php-d
 # Install Node.js from official Node.js binary tarball, then install PHP deps
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends xz-utils ca-certificates; \
+    apt-get install -y --no-install-recommends \
+      bash \
+      curl \
+      ca-certificates \
+      xz-utils; \
+    # NodeJS 
     arch="$(dpkg --print-architecture)"; \
     case "$arch" in \
         amd64) node_arch="x64" ;; \
