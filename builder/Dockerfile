@@ -23,7 +23,7 @@ LABEL org.opencontainers.image.title="PHP Builder" \
       org.opencontainers.image.created=$CREATE_DATE \
       org.opencontainers.image.version=$VERSION
 
-ENV NODE_VERSION=${NODE_VERSION}
+ENV NODE=${NODE_VERSION}
 
 # Composer from official image
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
@@ -40,15 +40,8 @@ RUN set -eux; \
       ca-certificates \
       xz-utils; \
     # NodeJS 
-    arch="$(dpkg --print-architecture)"; \
-    case "$arch" in \
-        amd64) node_arch="x64" ;; \
-        arm64) node_arch="arm64" ;; \
-        *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
-    esac; \
-    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
-      | tar -xJ -C /usr/local --strip-components=1 --no-same-owner; \
-    ln -sf /usr/local/bin/node /usr/local/bin/nodejs; \
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE}.x" | bash - \
+    && apt-get install -y --no-install-recommends nodejs; \
     node --version; \
     npm --version; \
     # Drupal Requirement with cleanup script
