@@ -1,72 +1,95 @@
-# WIP
-ARG PHP='8.5'
-ARG OS='bookworm'
-ARG BASE_IMAGE="php:${PHP}-fpm-${OS}"
+# Drupal runtime: Apache event MPM + PHP-FPM + s6-overlay
+# Build example:
+#   docker build --build-arg PHP=8.4 --build-arg OS=bookworm -t alchatti/drupal:8.4-apache-fpm-s6 .
 
-#! S6 Build
+ARG PHP=8.4
+ARG OS=bookworm
+ARG BASE_IMAGE=php:${PHP}-fpm-${OS}
+
 FROM ${BASE_IMAGE} AS s6-build
 
-ARG S6_OVERLAY_VERSION="3.2.1.0"
+ARG S6_OVERLAY_VERSION=3.2.2.0
 ARG TARGETARCH
 
-# FIXED: Extract into a distinct sandbox folder (/s6-rootfs)
 RUN set -eux; \
-  case "$TARGETARCH" in \
-  amd64) s6arch="x86_64" ;; \
-  arm64) s6arch="aarch64" ;; \
-  *) echo "Unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
-  esac; \
-  curl -fsSL -o /tmp/s6-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz"; \
-  curl -fsSL -o /tmp/s6-arch.tar.xz   "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${s6arch}.tar.xz"; \
-  mkdir -p /s6-rootfs; \
-  tar -C /s6-rootfs -Jxpf /tmp/s6-noarch.tar.xz; \
-  tar -C /s6-rootfs -Jxpf /tmp/s6-arch.tar.xz;
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl xz-utils; \
+    rm -rf /var/lib/apt/lists/*; \
+    case "${TARGETARCH}" in \
+      amd64) s6arch="x86_64" ;; \
+      arm64) s6arch="aarch64" ;; \
+      *) echo "Unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/s6-noarch.tar.xz \
+      "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz"; \
+    curl -fsSL -o /tmp/s6-arch.tar.xz \
+      "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${s6arch}.tar.xz"; \
+    mkdir -p /s6-rootfs; \
+    tar -C /s6-rootfs -Jxpf /tmp/s6-noarch.tar.xz; \
+    tar -C /s6-rootfs -Jxpf /tmp/s6-arch.tar.xz
 
-#! Image Build
 FROM ${BASE_IMAGE}
 
-# 1. Install Apache
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    apache2 \
-    && rm -rf /var/lib/apt/lists/*
-    
-# Copy scripts
-COPY --chmod=+x scripts/ /usr/local/bin/
+ARG PHP
+ARG OS
 
-# Copy s6 directly from the custom sandbox directory root
-COPY --from=s6-build /s6-rootfs/ /
+LABEL org.opencontainers.image.title="Drupal Apache PHP-FPM s6 runtime" \
+      org.opencontainers.image.description="Rootless Drupal runtime using Apache event MPM, PHP-FPM and s6-overlay" \
+      org.opencontainers.image.base.name="php:${PHP}-fpm-${OS}"
 
-# 4. Create the PHP-FPM socket configuration
-RUN mkdir -p /var/run/php && chown -R www-data:www-data /var/run/php
-RUN cat << 'EOF' > /usr/local/etc/php-fpm.d/zz-docker.conf
-[www]
-listen = /var/run/php/php-fpm.sock
-listen.owner = www-data
-listen.group = www-data
-listen.mode = 0660
-EOF
- 
-RUN install-php-dependencies.sh
-RUN install-runtimes.sh --mariadb
-RUN configure-drupal-runtime.sh
-
-# --- CRITICAL FOR ROOTLESS S6-OVERLAY ---
-# Tell s6-overlay where it can read/write states as an unprivileged user
-ENV S6_RUN_DIR=/var/run/apache2 \
-    S6_LOG_DIR=/var/log/apache2
-
-# Ensure permissions on configuration directory are owned by www-data
-RUN chown -R www-data:www-data /etc/s6-overlay
-
-ENV PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/_config/php
-ENV PATH="/var/www/html/vendor/bin:${PATH}"
-
-ENV APACHE_RUN_USER=www-data \
+ENV DRUPAL_RUNTIME_MODE=s6-fpm \
+    APACHE_PORT=8080 \
+    APP_ROOT=/var/www/html \
+    DOC_ROOT=/var/www/html/web \
+    CONFIG_ROOT=/_config \
+    APACHE_CONFIG_DIR=/_config/apache \
+    PHP_CONFIG_DIR=/_config/php \
+    FPM_RUNTIME_CONF=/usr/local/etc/php-fpm.d/zz-runtime.conf \
+    PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/_config/php \
+    PATH=/var/www/html/vendor/bin:${PATH} \
+    S6_KEEP_ENV=1 \
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
+    S6_RUN_DIR=/var/run/apache2 \
+    S6_LOG_DIR=/var/log/apache2 \
+    APACHE_RUN_USER=www-data \
     APACHE_RUN_GROUP=www-data \
     APACHE_PID_FILE=/var/run/apache2/apache2.pid \
     APACHE_RUN_DIR=/var/run/apache2 \
     APACHE_LOCK_DIR=/var/lock/apache2 \
     APACHE_LOG_DIR=/var/log/apache2
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      apache2 \
+      bash \
+      ca-certificates \
+      curl; \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=s6-build /s6-rootfs/ /
+COPY --chmod=755 scripts/ /usr/local/bin/
+
+RUN set -eux; \
+    install-php-dependencies.sh; \
+    install-runtimes.sh --mariadb; \
+    configure-drupal-runtime.sh; \
+    generate-s6-services.sh; \
+    touch "${FPM_RUNTIME_CONF}"; \
+    chown -R www-data:www-data \
+      "${APP_ROOT}" \
+      "${CONFIG_ROOT}" \
+      /mnt/files \
+      /var/run/apache2 \
+      /var/lock/apache2 \
+      /var/log/apache2 \
+      /var/run/php \
+      /etc/apache2 \
+      /etc/s6-overlay \
+      "${FPM_RUNTIME_CONF}"; \
+    chmod +x \
+      /etc/s6-overlay/s6-rc.d/php-fpm/run \
+      /etc/s6-overlay/s6-rc.d/apache/run
 
 WORKDIR /var/www/html
 
@@ -74,9 +97,8 @@ USER www-data
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD ["healthcheck.sh"]
 
-ENTRYPOINT ["docker-entrypoint-apache-fpm.sh"]
-# Let the Entrypoint execute /init automatically
+ENTRYPOINT ["docker-entrypoint-apache.sh"]
 CMD ["/init"]
