@@ -27,7 +27,7 @@ jobs:
         {
           "builder": {
             "build_args": ["NODE=24"],
-            "test_command": "docker run --rm \"$IMAGE\" verify-builder-tools.sh"
+            "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
           },
           "fpm-apache": {},
           "apache": {},
