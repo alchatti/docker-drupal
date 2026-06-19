@@ -62,6 +62,9 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       apache2 \
+      bash \
+      ca-certificates \
+      curl; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=s6-build /s6-rootfs/ /
