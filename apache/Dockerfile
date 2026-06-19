@@ -1,46 +1,27 @@
-ARG PHP=8.3
+# Optional example for the Apache mod_php variant using the same scripts/entrypoint.
+ARG PHP=8.4
 ARG OS=bookworm
-
 FROM php:${PHP}-apache-${OS}
 
-# Copy scripts
-COPY --chmod=+x scripts/ /usr/local/bin/
+ENV DRUPAL_RUNTIME_MODE=mod_php \
+    APACHE_PORT=8080 \
+    APP_ROOT=/var/www/html \
+    DOC_ROOT=/var/www/html/web \
+    CONFIG_ROOT=/_config \
+    APACHE_CONFIG_DIR=/_config/apache \
+    PHP_CONFIG_DIR=/_config/php \
+    PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/_config/php \
+    PATH=/var/www/html/vendor/bin:${PATH}
 
-# Install PHP dependencies and runtime tools
-RUN install-php-dependencies.sh
-#TODO: Switch this base & variants stage builds
-RUN install-runtimes.sh --mariadb
+COPY --chmod=755 scripts/ /usr/local/bin/
 
-# Configure Apache + Drupal runtime
-RUN configure-drupal-runtime.sh
+RUN set -eux; \
+    install-php-dependencies.sh; \
+    install-runtimes.sh --mariadb; \
+    configure-drupal-runtime.sh
 
-# Shared PHP runtime config scan path
-ENV PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/_config/php
-
-# Global Composer/Drush shortcut path
-ENV PATH="/var/www/html/vendor/bin:${PATH}"
-
-# Apache environment overrides for non-root execution
-ENV APACHE_RUN_USER=www-data \
-    APACHE_RUN_GROUP=www-data \
-    APACHE_PID_FILE=/var/run/apache2/apache2.pid \
-    APACHE_RUN_DIR=/var/run/apache2 \
-    APACHE_LOCK_DIR=/var/lock/apache2 \
-    APACHE_LOG_DIR=/var/log/apache2
-
-# Working directory
 WORKDIR /var/www/html
-
-# Drop privileges
-USER www-data
-
 EXPOSE 8080
-VOLUME ["/mnt/files"]
-
-# Configure Docker to run the healthcheck
-# Note: Adjust start-period if your container runs database updates on startup
-HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["healthcheck.sh"]
-
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["healthcheck.sh"]
 ENTRYPOINT ["docker-entrypoint-apache.sh"]
 CMD ["apache2-foreground"]
