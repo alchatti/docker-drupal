@@ -55,8 +55,8 @@ jobs:
       # Optional image verification, empty when not defined in the blueprint.
       test_command: ${{ matrix.test_command }}
       test_platform: linux/amd64
-      test_image_tag: local/${{ matrix.context }}-${{ matrix.target }}:test
+      test_image_tag: local/${{ matrix.context }}-${{ matrix.target || 'base' }}:test
       # Explicitly pass cache configurations to the backend
-      cache_from: type=gha,scope=${{ matrix.context }}-${{ matrix.target }}
-      cache_to: type=gha,mode=max,scope=${{ matrix.context }}-${{ matrix.target }}
+      cache_from: type=gha,scope=${{ matrix.context }}-${{ matrix.target || 'base'}}
+      cache_to: type=gha,mode=max,scope=${{ matrix.context }}-${{ matrix.target || 'base' }}
     secrets: inherit
