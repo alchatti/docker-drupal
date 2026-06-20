@@ -34,8 +34,6 @@ COPY --chmod=+x scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 
 # Install Node.js from official Node.js binary tarball, then install PHP deps
 RUN set -eux; \
-    # Drupal Requirement with cleanup script
-    install-php-dependencies.sh ; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       bash \
@@ -45,8 +43,8 @@ RUN set -eux; \
     # NodeJS 
     curl -fsSL "https://deb.nodesource.com/setup_${NODE}.x" | bash - \
     && apt-get install -y --no-install-recommends nodejs; \
-    node --version; \
-    npm --version;
+    # Drupal Requirement with cleanup script
+    install-php-dependencies.sh ;
 
 # Post-installation system verification
 RUN set -eux; \
