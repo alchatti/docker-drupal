@@ -36,7 +36,8 @@ ARG OS
 
 LABEL org.opencontainers.image.title="Drupal Apache PHP-FPM s6 runtime" \
   org.opencontainers.image.description="Rootless Drupal runtime using Apache event MPM, PHP-FPM and s6-overlay" \
-  org.opencontainers.image.base.name="php:${PHP}-fpm-${OS}"
+  org.opencontainers.image.base.name="php:${PHP}-fpm-${OS}" \
+  org.opencontainers.image.source="https://github.com/alchatti/docker-drupal"
 
 ENV DRUPAL_RUNTIME_MODE=s6-fpm \
   DRUPAL_SUBDIR= \
