@@ -6,7 +6,6 @@ set -euo pipefail
 
 set -x
 
-APACHE_CONFIG_DIR="${CONFIG_ROOT}/apache"
 PHP_CONF_DIR="/usr/local/etc/php/conf.d"
 
 APACHE_PORTS_CONF="/etc/apache2/ports.conf"
@@ -18,6 +17,7 @@ mkdir -p \
     "${APP_ROOT}" \
     "${DOC_ROOT}" \
     "${APACHE_CONFIG_DIR}" \
+    "${PHP_CONF_DIR}" \
     "${FILES_DIR}/public" \
     "${FILES_DIR}/private" \
     "${FILES_DIR}/tmp" \
