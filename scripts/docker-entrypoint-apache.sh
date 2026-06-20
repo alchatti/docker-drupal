@@ -1,66 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Shared runtime entrypoint for both image variants:
+# Shared runtime entrypoint for:
 #   s6-fpm  -> Apache + PHP-FPM under s6-overlay
 #   mod_php -> Apache foreground with mod_php
-
 ## Runtime Controls
 ## - DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
 ## - DRUPAL_SUBDIR: Optional subdirectory for Drupal site (e.g. /example)
 
-# ==============================================================================
-# Defaults
-# ==============================================================================
-
-CONFIG_ROOT="/_config"
-APACHE_CONFIG_DIR="${CONFIG_ROOT}/apache"
-PHP_CONFIG_DIR="${CONFIG_ROOT}/php"
-FPM_RUNTIME_CONF="/usr/local/etc/php-fpm.d/zz-runtime.conf"
-
-DOC_ROOT="/var/www/html/web"
-DRUPAL_ROOT="${DOC_ROOT}"
-
-DEFAULT_MEMORY_LIMIT_MB=1024
-USE_HOST_MEMORY_WHEN_UNLIMITED=0
-
-RESERVED_MEMORY_MIN_MB=128
-RESERVED_MEMORY_FRACTION=10
-
-PHP_MEMORY_LIMIT_MIN_MB=128
-PHP_MEMORY_LIMIT_MAX_MB=768
-
-OPCACHE_MIN_MB=96
-OPCACHE_MAX_MB=256
-PHP_MAX_ACCEL_FILES=50000
-PHP_VALIDATE_TIMESTAMPS=0
-
-AVG_PHP_THREAD_MB=120
-HEADROOM_MB=64
-MIN_PHP_THREADS=2
-MAX_PHP_THREADS_CAP=256
-
-START_WORKERS=2
-MIN_SPARE_WORKERS=2
-MAX_SPARE_WORKERS=10
-MAX_REQUESTS_PER_CHILD=5000
-
-APACHE_WORKERS_MULTIPLIER=4
-APACHE_MAX_REQUEST_WORKERS_CAP=400
-
-# ==============================================================================
-# Runtime mode detection
-# ==============================================================================
-
-if [ -n "${DRUPAL_RUNTIME_MODE:-}" ]; then
-    RUNTIME_MODE="${DRUPAL_RUNTIME_MODE}"
-elif [ -x /init ] && [ -d /etc/s6-overlay ]; then
-    RUNTIME_MODE="s6-fpm"
-else
-    RUNTIME_MODE="mod_php"
-fi
-
-case "${RUNTIME_MODE}" in
+case "${DRUPAL_RUNTIME_MODE}" in
     s6-fpm)
         DEFAULT_COMMAND="/init"
         echo "[system-init] Starting Drupal container: Apache + PHP-FPM + s6-overlay"
@@ -70,7 +18,7 @@ case "${RUNTIME_MODE}" in
         echo "[system-init] Starting Drupal container: Apache mod_php"
         ;;
     *)
-        echo "ERROR: Unsupported DRUPAL_RUNTIME_MODE=${RUNTIME_MODE}" >&2
+        echo "ERROR: Unsupported DRUPAL_RUNTIME_MODE=${DRUPAL_RUNTIME_MODE}" >&2
         exit 1
         ;;
 esac
@@ -82,37 +30,24 @@ if [ -z "${FIRST_ARG}" ]; then
     FIRST_ARG="${DEFAULT_COMMAND}"
 fi
 
-# Bypass webserver initialization for one-off commands:
-# docker run image php -v
-# docker run image bash
-# docker run image drush status
 if [ "${FIRST_ARG}" != "apache2-foreground" ] && [ "${FIRST_ARG}" != "/init" ]; then
     echo "[system-init] Bypassing webserver initialization to run command: $*"
     exec "$@"
 fi
 
-# ==============================================================================
-# Config files
-# ==============================================================================
-
 APACHE_RUNTIME_CONF="${APACHE_CONFIG_DIR}/drupal-runtime.conf"
 APACHE_MPM_CONF="${APACHE_CONFIG_DIR}/apache-mpm.conf"
-PHP_RUNTIME_INI="${PHP_CONFIG_DIR}/zz-runtime.ini"
 
-mkdir -p "${APACHE_CONFIG_DIR}" "${PHP_CONFIG_DIR}"
+mkdir -p "${APACHE_CONFIG_DIR}"
 
-# ==============================================================================
-# Optional subdirectory routing
-# ==============================================================================
-
-if [ -n "${DRUPAL_SUBDIR:-}" ]; then
+if [ -n "${DRUPAL_SUBDIR}" ]; then
     CLEAN_SUBDIR="$(echo "${DRUPAL_SUBDIR}" | sed 's|^/||;s|/$||')"
     echo "[system-init] Activating Apache Alias for subdirectory: /${CLEAN_SUBDIR}"
 
     cat > "${APACHE_RUNTIME_CONF}" <<EOF_ALIAS
-Alias /${CLEAN_SUBDIR} ${DRUPAL_ROOT}
+Alias /${CLEAN_SUBDIR} ${DOC_ROOT}
 
-<Directory ${DRUPAL_ROOT}>
+<Directory ${DOC_ROOT}>
     Options FollowSymLinks
     AllowOverride All
     Require all granted
@@ -122,10 +57,6 @@ else
     echo "[system-init] Operating at root domain level."
     : > "${APACHE_RUNTIME_CONF}"
 fi
-
-# ==============================================================================
-# Memory detection
-# ==============================================================================
 
 get_mem_limit_mb() {
     local bytes="0"
@@ -145,7 +76,6 @@ get_mem_limit_mb() {
     elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
         bytes="$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)"
 
-        # cgroup v1 sometimes reports a huge value when memory is effectively unlimited.
         if [ "${bytes}" -gt 281474976710656 ] 2>/dev/null; then
             if [ "${USE_HOST_MEMORY_WHEN_UNLIMITED}" = "1" ]; then
                 bytes="$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo)"
@@ -154,7 +84,6 @@ get_mem_limit_mb() {
                 return
             fi
         fi
-
     else
         if [ "${USE_HOST_MEMORY_WHEN_UNLIMITED}" = "1" ]; then
             bytes="$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo)"
@@ -172,10 +101,6 @@ TOTAL_MB="$(get_mem_limit_mb)"
 if [ "${TOTAL_MB}" -lt 128 ] || [ "${TOTAL_MB}" -gt 262144 ]; then
     TOTAL_MB="${DEFAULT_MEMORY_LIMIT_MB}"
 fi
-
-# ==============================================================================
-# Memory tuning
-# ==============================================================================
 
 RESERVED_MB="$(( TOTAL_MB / RESERVED_MEMORY_FRACTION ))"
 
@@ -237,8 +162,7 @@ if [ "${APACHE_MAX_REQUEST_WORKERS}" -gt "${APACHE_MAX_REQUEST_WORKERS_CAP}" ]; 
     APACHE_MAX_REQUEST_WORKERS="${APACHE_MAX_REQUEST_WORKERS_CAP}"
 fi
 
-# Clamp FPM dynamic pool values so PHP-FPM never receives invalid config.
-if [ "${RUNTIME_MODE}" = "s6-fpm" ]; then
+if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
     if [ "${START_WORKERS}" -gt "${MAX_WORKERS}" ]; then
         START_WORKERS="${MAX_WORKERS}"
     fi
@@ -260,20 +184,12 @@ if [ "${RUNTIME_MODE}" = "s6-fpm" ]; then
     fi
 fi
 
-echo "[system-init] Auto-tuned profile (${RUNTIME_MODE}): TOTAL=${TOTAL_MB}MB | RESERVED=${RESERVED_MB}MB | PHP_BUDGET=${PHP_BUDGET_MB}MB | memory_limit=${PHP_MEMORY_LIMIT_MB}M | opcache=${OPCACHE_MB}M | php_workers=${MAX_WORKERS} | apache_workers=${APACHE_MAX_REQUEST_WORKERS}"
-
-# ==============================================================================
-# PHP runtime Env
-# ==============================================================================
-
 export PHP_MEMORY_LIMIT="${PHP_MEMORY_LIMIT_MB}M"
 export PHP_OPCACHE_MEMORY_CONSUMPTION="${OPCACHE_MB}"
 
-# ==============================================================================
-# Apache / FPM runtime config
-# ==============================================================================
+echo "[system-init] Auto-tuned profile (${DRUPAL_RUNTIME_MODE}): TOTAL=${TOTAL_MB}MB | RESERVED=${RESERVED_MB}MB | PHP_BUDGET=${PHP_BUDGET_MB}MB | PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT} | PHP_OPCACHE_MEMORY_CONSUMPTION=${PHP_OPCACHE_MEMORY_CONSUMPTION} | php_workers=${MAX_WORKERS} | apache_workers=${APACHE_MAX_REQUEST_WORKERS}"
 
-if [ "${RUNTIME_MODE}" = "s6-fpm" ]; then
+if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
     cat > "${FPM_RUNTIME_CONF}" <<EOF_FPM
 [www]
 pm = dynamic
@@ -301,7 +217,6 @@ ServerSignature Off
     MaxConnectionsPerChild   ${MAX_REQUESTS_PER_CHILD}
 </IfModule>
 EOF_APACHE_EVENT
-
 else
     cat > "${APACHE_MPM_CONF}" <<EOF_APACHE_PREFORK
 ServerTokens Prod
