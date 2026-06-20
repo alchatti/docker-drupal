@@ -30,6 +30,7 @@ cat > "${S6_DIR}/apache/run" <<'EOF_RUN'
 #!/command/with-contenv sh
 set -eu
 rm -f /var/run/apache2/apache2.pid
+: "${APACHE_CONFDIR:=/etc/apache2}"
 . /etc/apache2/envvars
 exec apache2 -D FOREGROUND
 EOF_RUN

@@ -103,24 +103,32 @@ if [ -f "${APACHE_SECURITY_CONF}" ]; then
 fi
 
 cat > "${PHP_CONFIG_DIR}/docker-php-drupal-recommended.ini" <<'EOF_INI'
-output_buffering=true
-upload_max_filesize=64M
-post_max_size=64M
-max_execution_time=120
-max_input_vars=4000
-realpath_cache_size=4096K
-realpath_cache_ttl=600
-opcache.enable=1
-opcache.enable_cli=1
-opcache.interned_strings_buffer=16
-opcache.max_accelerated_files=50000
-opcache.validate_timestamps=0
-opcache.revalidate_freq=60
+output_buffering=${PHP_OUTPUT_BUFFERING}
+upload_max_filesize=${PHP_UPLOAD_MAX_FILESIZE}
+post_max_size=${PHP_POST_MAX_SIZE}
+max_execution_time=${PHP_MAX_EXECUTION_TIME}
+max_input_vars=${PHP_MAX_INPUT_VARS}
+realpath_cache_size=${PHP_REALPATH_CACHE_SIZE}
+realpath_cache_ttl=${PHP_REALPATH_CACHE_TTL}
+date.timezone=${TZ}
+
+opcache.enable=${PHP_OPCACHE_ENABLE}
+opcache.enable_cli=${PHP_OPCACHE_ENABLE_CLI}
+opcache.interned_strings_buffer=${PHP_OPCACHE_INTERNED_STRINGS_BUFFER}
+opcache.max_accelerated_files=${PHP_OPCACHE_MAX_ACCEL_FILES}
+opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}
+opcache.revalidate_freq=${PHP_OPCACHE_REVALIDATE_FREQ}
 EOF_INI
 
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
-    cat > /usr/local/etc/php-fpm.d/zz-docker-socket.conf <<EOF_FPM_SOCKET
+    cat > /usr/local/etc/php-fpm.d/zz-docker.conf <<EOF_FPM_SOCKET
+[global]
+daemonize = no
 [www]
+;; Rootless override www.conf
+user =
+group =
+;; Socket permissions for Apache to connect to PHP-FPM
 listen = ${FPM_SOCKET}
 listen.owner = ${APACHE_USER}
 listen.group = ${APACHE_GROUP}
@@ -140,7 +148,7 @@ chown -R "${APACHE_USER}:${APACHE_GROUP}" \
     /etc/apache2
 
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
-    chown "${APACHE_USER}:${APACHE_GROUP}" "${FPM_RUNTIME_CONF}" /usr/local/etc/php-fpm.d/zz-docker-socket.conf
+    chown "${APACHE_USER}:${APACHE_GROUP}" "${FPM_RUNTIME_CONF}" /usr/local/etc/php-fpm.d/zz-docker.conf
 fi
 
 chmod -R 755 "${CONFIG_ROOT}" "${APP_ROOT}" /etc/apache2

@@ -11,7 +11,21 @@ ENV DRUPAL_RUNTIME_MODE=mod_php \
     APACHE_CONFIG_DIR=/_config/apache \
     PHP_CONFIG_DIR=/_config/php \
     PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/_config/php \
-    PATH=/var/www/html/vendor/bin:${PATH}
+    PATH=/var/www/html/vendor/bin:${PATH} \
+    TZ=Asia/Dubai \
+    PHP_UPLOAD_MAX_FILESIZE=64M \
+    PHP_POST_MAX_SIZE=64M \
+    PHP_MAX_EXECUTION_TIME=120 \
+    PHP_MAX_INPUT_VARS=4000 \
+    PHP_OUTPUT_BUFFERING=true \
+    PHP_REALPATH_CACHE_SIZE=4096K \
+    PHP_REALPATH_CACHE_TTL=600 \
+    PHP_OPCACHE_ENABLE=1 \
+    PHP_OPCACHE_ENABLE_CLI=1 \
+    PHP_OPCACHE_INTERNED_STRINGS_BUFFER=16 \
+    PHP_OPCACHE_MAX_ACCEL_FILES=50000 \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
+    PHP_OPCACHE_REVALIDATE_FREQ=60
 
 COPY --chmod=755 scripts/ /usr/local/bin/
 

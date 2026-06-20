@@ -9,12 +9,10 @@ PHP ?= 8.4
 OS ?= trixie
 # Subsite Alias
 SITE ?= example
-# Runtime Resource Controls
-MEM ?= 2
 
-IMAGE_NAME ?= local/drupal-apache-fpm
+IMAGE_NAME ?= local/drupal-apache
 IMAGE_TAG ?= p$(PHP)-n$(NODE_VERSION)-$(OS)
-CONTAINER_NAME ?= drupal-apache-fpm
+CONTAINER_NAME ?= drupal-apache
 
 TIMESTAMP := $(shell date +'%Y%m%d')
 IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
@@ -37,10 +35,7 @@ build:
 run:
 	@echo "🚀 Starting $(IMAGE)..."
 	docker run --rm --name $(CONTAINER_NAME) \
-	--memory=$(MEM)g \
 	-e DRUPAL_SUBDIR="$(SITE)" \
-	-e PHP_UPLOAD_MAX_FILESIZE=100M \
-	-e PHP_POST_MAX_SIZE=100M \
 	-v ../app:/var/www/html/web \
 	-p 8080:8080 \
 	$(IMAGE)
@@ -49,12 +44,11 @@ run:
 test:
 	@echo "🔍 Running test script in $(IMAGE)..."
 	docker run -d --name $(CONTAINER_NAME)-test \
-	--memory=$(MEM)g \
 	-e DRUPAL_SUBDIR="$(SITE)" \
 	-p 8080:8080 \
 	"$(IMAGE)" \
 	&& sleep 5 \
-	&& docker exec $(CONTAINER_NAME)-test verify-apache-fpm-php.sh \
+	&& docker exec $(CONTAINER_NAME)-test verify-apache-php.sh \
 	&& docker rm -f $(CONTAINER_NAME)-test
 
 ## ℹ️ Show available targets
