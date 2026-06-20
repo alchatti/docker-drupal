@@ -13,8 +13,6 @@ set -euo pipefail
 # Defaults
 # ==============================================================================
 
-TZ="Asia/Dubai"
-
 CONFIG_ROOT="/_config"
 APACHE_CONFIG_DIR="${CONFIG_ROOT}/apache"
 PHP_CONFIG_DIR="${CONFIG_ROOT}/php"
@@ -265,13 +263,11 @@ fi
 echo "[system-init] Auto-tuned profile (${RUNTIME_MODE}): TOTAL=${TOTAL_MB}MB | RESERVED=${RESERVED_MB}MB | PHP_BUDGET=${PHP_BUDGET_MB}MB | memory_limit=${PHP_MEMORY_LIMIT_MB}M | opcache=${OPCACHE_MB}M | php_workers=${MAX_WORKERS} | apache_workers=${APACHE_MAX_REQUEST_WORKERS}"
 
 # ==============================================================================
-# PHP runtime INI
+# PHP runtime Env
 # ==============================================================================
 
-cat > "${PHP_RUNTIME_INI}" <<EOF_INI
-memory_limit=${PHP_MEMORY_LIMIT_MB}M
-opcache.memory_consumption=${OPCACHE_MB}
-EOF_INI
+export PHP_MEMORY_LIMIT="${PHP_MEMORY_LIMIT_MB}M"
+export PHP_OPCACHE_MEMORY_CONSUMPTION="${OPCACHE_MB}"
 
 # ==============================================================================
 # Apache / FPM runtime config
