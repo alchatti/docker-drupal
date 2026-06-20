@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Job 1: Generate the full matrix using target mapping conventions
   prepare:
     uses: ./.github/workflows/matrix-generator.yml
     with:
@@ -30,20 +29,24 @@ jobs:
             "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
           },
           "fpm-apache": {},
-          "apache": {},
-          "apache-fpm": {}
+          "apache": {
+            "test_command": "docker rm -f apache-php-test >/dev/null 2>&1 || true; docker run -d --name apache-php-test -p 8080:8080 -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs apache-php-test || true; docker rm -f apache-php-test || true; }; trap cleanup EXIT; sleep 8; docker exec apache-php-test verify-apache-php.sh"
+          },
+          "apache-fpm": {
+            "test_command": "docker rm -f apache-php-test >/dev/null 2>&1 || true; docker run -d --name apache-php-test -p 8080:8080 -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs apache-php-test || true; docker rm -f apache-php-test || true; }; trap cleanup EXIT; sleep 8; docker exec apache-php-test verify-apache-php.sh"
+          }
         }
 
-  # Job 2: Process single and multi-stage builds concurrently
   build:
     needs: prepare
     permissions:
       contents: read
+
     strategy:
       max-parallel: 4
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.matrix) }}
-    
+
     uses: alchatti/.github/.github/workflows/docker-build-push.yml@main
     with:
       context: .
@@ -52,11 +55,12 @@ jobs:
       build_args: ${{ matrix.build_args }}
       tags: ${{ matrix.tags }}
       target: ${{ matrix.target }}
-      # Optional image verification, empty when not defined in the blueprint.
+
       test_command: ${{ matrix.test_command }}
       test_platform: linux/amd64
       test_image_tag: ${{ matrix.test_image_tag }}
-      # Explicitly pass cache configurations to the backend
+
       cache_from: type=gha,scope=${{ matrix.variant }}
       cache_to: type=gha,mode=max,scope=${{ matrix.variant }}
+
     secrets: inherit
