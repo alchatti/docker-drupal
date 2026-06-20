@@ -23,16 +23,20 @@ LABEL org.opencontainers.image.title="PHP Builder" \
       org.opencontainers.image.created=$CREATE_DATE \
       org.opencontainers.image.version=$VERSION
 
-ENV NODE=${NODE_VERSION}
+ENV NODE=${NODE_VERSION} \
+    HOME=/var/www \
+    COMPOSER_HOME=/var/www/.composer \
+    NPM_CONFIG_CACHE=/var/www/.npm \
+    PATH=/app/vendor/bin:/var/www/.composer/vendor/bin:${PATH}
 
 # Composer from official image
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
-# Copy script to /usr/local/bin/ with execution permissions
+# Copy scripts to /usr/local/bin with execution permissions
 COPY --chmod=+x scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
 COPY --chmod=+x scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 
-# Install Node.js from official Node.js binary tarball, then install PHP deps
+# Install Node.js, PHP extensions/dependencies, and prepare writable non-root paths
 RUN set -eux; \
     apt-get update; \
     apt-get upgrade -y; \
@@ -41,20 +45,30 @@ RUN set -eux; \
       curl \
       ca-certificates \
       xz-utils; \
-    # NodeJS 
-    curl -fsSL "https://deb.nodesource.com/setup_${NODE}.x" | bash - \
-    && apt-get install -y --no-install-recommends nodejs; \
-    # Drupal Requirement with cleanup script
-    install-php-dependencies.sh ;
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE}.x" | bash -; \
+    apt-get install -y --no-install-recommends nodejs; \
+    install-php-dependencies.sh; \
+    mkdir -p \
+      /app \
+      /var/www/.composer \
+      /var/www/.npm; \
+    chown -R www-data:www-data \
+      /app \
+      /var/www/.composer \
+      /var/www/.npm; \
+    rm -rf /var/lib/apt/lists/*
 
-# Post-installation system verification
+COPY --chmod=+x builder/cleanup-build.php /usr/local/bin/cleanup-build
+COPY --chmod=644 builder/cleanup.json /usr/local/bin/cleanup.json
+
+WORKDIR /app
+
+USER www-data
+
+# Post-installation system verification as root during build
 RUN set -eux; \
     composer --version; \
     node --version; \
     npm --version
 
-COPY --chmod=+x builder/cleanup-build.php /usr/local/bin/cleanup-build
-COPY builder/cleanup.json /usr/local/bin/cleanup.json
-
-WORKDIR /app
 CMD ["bash"]
