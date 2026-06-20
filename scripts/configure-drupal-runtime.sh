@@ -1,240 +1,149 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Shared runtime entrypoint for:
-#   s6-fpm  -> Apache + PHP-FPM under s6-overlay
-#   mod_php -> Apache foreground with mod_php
+# Build-time Apache/PHP layout for Drupal.
+# Assumes required defaults are supplied by Dockerfile ENV.
+# This script must never start Apache, PHP-FPM, s6, /init, or exec "$@".
 
-## Runtime Controls
-## - DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
-## - DRUPAL_SUBDIR: Optional subdirectory for Drupal site (e.g. /example)
+set -x
 
-case "${DRUPAL_RUNTIME_MODE}" in
-    s6-fpm)
-        DEFAULT_COMMAND="/init"
-        echo "[system-init] Starting Drupal container: Apache + PHP-FPM + s6-overlay"
-        ;;
-    mod_php)
-        DEFAULT_COMMAND="apache2-foreground"
-        echo "[system-init] Starting Drupal container: Apache mod_php"
-        ;;
-    *)
-        echo "ERROR: Unsupported DRUPAL_RUNTIME_MODE=${DRUPAL_RUNTIME_MODE}" >&2
-        exit 1
-        ;;
-esac
+PHP_CONF_DIR="/usr/local/etc/php/conf.d"
 
-FIRST_ARG="${1:-}"
+APACHE_PORTS_CONF="/etc/apache2/ports.conf"
+APACHE_DEFAULT_SITE="/etc/apache2/sites-available/000-default.conf"
+APACHE_MAIN_CONF="/etc/apache2/apache2.conf"
+APACHE_SECURITY_CONF="/etc/apache2/conf-available/security.conf"
 
-if [ -z "${FIRST_ARG}" ]; then
-    set -- "${DEFAULT_COMMAND}"
-    FIRST_ARG="${DEFAULT_COMMAND}"
-fi
+mkdir -p \
+    "${APP_ROOT}" \
+    "${DOC_ROOT}" \
+    "${APACHE_CONFIG_DIR}" \
+    "${PHP_CONF_DIR}" \
+    "${FILES_DIR}/public" \
+    "${FILES_DIR}/private" \
+    "${FILES_DIR}/tmp" \
+    "${FILES_DIR}/config/sync" \
+    /var/run/apache2 \
+    /var/lock/apache2 \
+    /var/log/apache2 \
+    /var/run/php
 
-if [ "${FIRST_ARG}" != "apache2-foreground" ] && [ "${FIRST_ARG}" != "/init" ]; then
-    echo "[system-init] Bypassing webserver initialization to run command: $*"
-    exec "$@"
-fi
+touch \
+    "${APACHE_CONFIG_DIR}/apache-mpm.conf" \
+    "${APACHE_CONFIG_DIR}/drupal-runtime.conf"
 
-APACHE_RUNTIME_CONF="${APACHE_CONFIG_DIR}/drupal-runtime.conf"
-APACHE_MPM_CONF="${APACHE_CONFIG_DIR}/apache-mpm.conf"
-
-mkdir -p "${APACHE_CONFIG_DIR}"
-
-if [ -n "${DRUPAL_SUBDIR}" ]; then
-    CLEAN_SUBDIR="$(echo "${DRUPAL_SUBDIR}" | sed 's|^/||;s|/$||')"
-    echo "[system-init] Activating Apache Alias for subdirectory: /${CLEAN_SUBDIR}"
-
-    cat > "${APACHE_RUNTIME_CONF}" <<EOF_ALIAS
-Alias /${CLEAN_SUBDIR} ${DOC_ROOT}
-
-<Directory ${DOC_ROOT}>
-    Options FollowSymLinks
-    AllowOverride All
-    Require all granted
-</Directory>
-EOF_ALIAS
-else
-    echo "[system-init] Operating at root domain level."
-    : > "${APACHE_RUNTIME_CONF}"
-fi
-
-get_mem_limit_mb() {
-    local bytes="0"
-
-    if [ -f /sys/fs/cgroup/memory.max ]; then
-        bytes="$(cat /sys/fs/cgroup/memory.max)"
-
-        if [ "${bytes}" = "max" ]; then
-            if [ "${USE_HOST_MEMORY_WHEN_UNLIMITED}" = "1" ]; then
-                bytes="$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo)"
-            else
-                echo "${DEFAULT_MEMORY_LIMIT_MB}"
-                return
-            fi
-        fi
-
-    elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
-        bytes="$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)"
-
-        if [ "${bytes}" -gt 281474976710656 ] 2>/dev/null; then
-            if [ "${USE_HOST_MEMORY_WHEN_UNLIMITED}" = "1" ]; then
-                bytes="$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo)"
-            else
-                echo "${DEFAULT_MEMORY_LIMIT_MB}"
-                return
-            fi
-        fi
-
-    else
-        if [ "${USE_HOST_MEMORY_WHEN_UNLIMITED}" = "1" ]; then
-            bytes="$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo)"
-        else
-            echo "${DEFAULT_MEMORY_LIMIT_MB}"
-            return
-        fi
-    fi
-
-    echo "${bytes}" | awk '{printf "%.0f", $1 / 1024 / 1024}'
-}
-
-TOTAL_MB="$(get_mem_limit_mb)"
-
-if [ "${TOTAL_MB}" -lt 128 ] || [ "${TOTAL_MB}" -gt 262144 ]; then
-    TOTAL_MB="${DEFAULT_MEMORY_LIMIT_MB}"
-fi
-
-RESERVED_MB="$(( TOTAL_MB / RESERVED_MEMORY_FRACTION ))"
-
-if [ "${RESERVED_MB}" -lt "${RESERVED_MEMORY_MIN_MB}" ]; then
-    RESERVED_MB="${RESERVED_MEMORY_MIN_MB}"
-fi
-
-PHP_BUDGET_MB="$(( TOTAL_MB - RESERVED_MB ))"
-
-if [ "${PHP_BUDGET_MB}" -lt 128 ]; then
-    PHP_BUDGET_MB=128
-fi
-
-PHP_MEMORY_LIMIT_MB="$(( PHP_BUDGET_MB / 4 ))"
-
-if [ "${PHP_MEMORY_LIMIT_MB}" -lt "${PHP_MEMORY_LIMIT_MIN_MB}" ]; then
-    PHP_MEMORY_LIMIT_MB="${PHP_MEMORY_LIMIT_MIN_MB}"
-fi
-
-if [ "${PHP_MEMORY_LIMIT_MB}" -gt "${PHP_MEMORY_LIMIT_MAX_MB}" ]; then
-    PHP_MEMORY_LIMIT_MB="${PHP_MEMORY_LIMIT_MAX_MB}"
-fi
-
-OPCACHE_MB="$(( TOTAL_MB / 8 ))"
-
-if [ "${OPCACHE_MB}" -lt "${OPCACHE_MIN_MB}" ]; then
-    OPCACHE_MB="${OPCACHE_MIN_MB}"
-fi
-
-if [ "${OPCACHE_MB}" -gt "${OPCACHE_MAX_MB}" ]; then
-    OPCACHE_MB="${OPCACHE_MAX_MB}"
-fi
-
-AVAILABLE_FOR_WORKERS_MB="$(( PHP_BUDGET_MB - OPCACHE_MB - HEADROOM_MB ))"
-
-if [ "${AVAILABLE_FOR_WORKERS_MB}" -lt "${AVG_PHP_THREAD_MB}" ]; then
-    MAX_PHP_THREADS=1
-else
-    MAX_PHP_THREADS="$(( AVAILABLE_FOR_WORKERS_MB / AVG_PHP_THREAD_MB ))"
-fi
-
-if [ "${MAX_PHP_THREADS}" -lt "${MIN_PHP_THREADS}" ]; then
-    MAX_PHP_THREADS="${MIN_PHP_THREADS}"
-fi
-
-if [ "${MAX_PHP_THREADS}" -gt "${MAX_PHP_THREADS_CAP}" ]; then
-    MAX_PHP_THREADS="${MAX_PHP_THREADS_CAP}"
-fi
-
-MAX_WORKERS="${MAX_PHP_THREADS}"
-
-APACHE_MAX_REQUEST_WORKERS="$(( MAX_WORKERS * APACHE_WORKERS_MULTIPLIER ))"
-
-if [ "${APACHE_MAX_REQUEST_WORKERS}" -lt 25 ]; then
-    APACHE_MAX_REQUEST_WORKERS=25
-fi
-
-if [ "${APACHE_MAX_REQUEST_WORKERS}" -gt "${APACHE_MAX_REQUEST_WORKERS_CAP}" ]; then
-    APACHE_MAX_REQUEST_WORKERS="${APACHE_MAX_REQUEST_WORKERS_CAP}"
-fi
+a2enmod rewrite alias expires headers
 
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
-    if [ "${START_WORKERS}" -gt "${MAX_WORKERS}" ]; then
-        START_WORKERS="${MAX_WORKERS}"
-    fi
-
-    if [ "${MIN_SPARE_WORKERS}" -gt "${MAX_WORKERS}" ]; then
-        MIN_SPARE_WORKERS="${MAX_WORKERS}"
-    fi
-
-    if [ "${MAX_SPARE_WORKERS}" -gt "${MAX_WORKERS}" ]; then
-        MAX_SPARE_WORKERS="${MAX_WORKERS}"
-    fi
-
-    if [ "${START_WORKERS}" -lt "${MIN_SPARE_WORKERS}" ]; then
-        START_WORKERS="${MIN_SPARE_WORKERS}"
-    fi
-
-    if [ "${MAX_SPARE_WORKERS}" -lt "${START_WORKERS}" ]; then
-        MAX_SPARE_WORKERS="${START_WORKERS}"
-    fi
+    a2dismod mpm_prefork || true
+    a2enmod mpm_event proxy proxy_fcgi setenvif
+elif [ "${DRUPAL_RUNTIME_MODE}" = "mod_php" ]; then
+    a2dismod mpm_event || true
+    a2enmod mpm_prefork
+else
+    echo "ERROR: Unsupported DRUPAL_RUNTIME_MODE=${DRUPAL_RUNTIME_MODE}" >&2
+    exit 1
 fi
 
-export PHP_MEMORY_LIMIT="${PHP_MEMORY_LIMIT_MB}M"
-export PHP_OPCACHE_MEMORY_CONSUMPTION="${OPCACHE_MB}"
+cat > "${APACHE_PORTS_CONF}" <<EOF_PORTS
+Listen ${APACHE_PORT}
+EOF_PORTS
 
-echo "[system-init] Auto-tuned profile (${DRUPAL_RUNTIME_MODE}): TOTAL=${TOTAL_MB}MB | RESERVED=${RESERVED_MB}MB | PHP_BUDGET=${PHP_BUDGET_MB}MB | PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT} | PHP_OPCACHE_MEMORY_CONSUMPTION=${PHP_OPCACHE_MEMORY_CONSUMPTION} | php_workers=${MAX_WORKERS} | apache_workers=${APACHE_MAX_REQUEST_WORKERS}"
+PHP_HANDLER=""
 
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
-    cat > "${FPM_RUNTIME_CONF}" <<EOF_FPM
+    PHP_HANDLER=$(cat <<EOF_HANDLER
+
+    <FilesMatch \\.php$>
+        SetHandler "proxy:unix:${FPM_SOCKET}|fcgi://localhost/"
+    </FilesMatch>
+EOF_HANDLER
+)
+fi
+
+cat > "${APACHE_DEFAULT_SITE}" <<EOF_VHOST
+<VirtualHost *:${APACHE_PORT}>
+    ServerName localhost
+    DocumentRoot ${DOC_ROOT}
+    DirectoryIndex index.php index.html
+
+    <Directory ${DOC_ROOT}>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>${PHP_HANDLER}
+
+    ErrorLog /proc/self/fd/2
+    CustomLog /proc/self/fd/1 combined
+</VirtualHost>
+EOF_VHOST
+
+grep -qxF "ServerName localhost" "${APACHE_MAIN_CONF}" \
+    || echo "ServerName localhost" >> "${APACHE_MAIN_CONF}"
+
+grep -qxF "IncludeOptional ${APACHE_CONFIG_DIR}/*.conf" "${APACHE_MAIN_CONF}" \
+    || echo "IncludeOptional ${APACHE_CONFIG_DIR}/*.conf" >> "${APACHE_MAIN_CONF}"
+
+if [ -f "${APACHE_SECURITY_CONF}" ]; then
+    sed -i 's/^ServerTokens .*/ServerTokens Prod/g' "${APACHE_SECURITY_CONF}"
+    sed -i 's/^ServerSignature .*/ServerSignature Off/g' "${APACHE_SECURITY_CONF}"
+fi
+
+cat > "${PHP_CONF_DIR}/docker-php-drupal-recommended.ini" <<'EOF_INI'
+memory_limit=${PHP_MEMORY_LIMIT}
+output_buffering=${PHP_OUTPUT_BUFFERING}
+upload_max_filesize=${PHP_UPLOAD_MAX_FILESIZE}
+post_max_size=${PHP_POST_MAX_SIZE}
+max_execution_time=${PHP_MAX_EXECUTION_TIME}
+max_input_vars=${PHP_MAX_INPUT_VARS}
+realpath_cache_size=${PHP_REALPATH_CACHE_SIZE}
+realpath_cache_ttl=${PHP_REALPATH_CACHE_TTL}
+date.timezone=${TZ}
+
+opcache.enable=${PHP_OPCACHE_ENABLE}
+opcache.enable_cli=${PHP_OPCACHE_ENABLE_CLI}
+opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}
+opcache.interned_strings_buffer=${PHP_OPCACHE_INTERNED_STRINGS_BUFFER}
+opcache.max_accelerated_files=${PHP_OPCACHE_MAX_ACCEL_FILES}
+opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}
+opcache.revalidate_freq=${PHP_OPCACHE_REVALIDATE_FREQ}
+EOF_INI
+
+if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
+    cat > /usr/local/etc/php-fpm.d/zz-docker.conf <<EOF_FPM_SOCKET
+[global]
+daemonize = no
+
 [www]
-pm = dynamic
-pm.start_servers = ${START_WORKERS}
-pm.min_spare_servers = ${MIN_SPARE_WORKERS}
-pm.max_spare_servers = ${MAX_SPARE_WORKERS}
-pm.max_children = ${MAX_WORKERS}
-pm.max_requests = ${MAX_REQUESTS_PER_CHILD}
+user =
+group =
+listen = ${FPM_SOCKET}
+listen.owner = ${APACHE_RUN_USER}
+listen.group = ${APACHE_RUN_GROUP}
+listen.mode = 0660
 clear_env = no
 catch_workers_output = yes
 decorate_workers_output = no
-EOF_FPM
+EOF_FPM_SOCKET
 
-    cat > "${APACHE_MPM_CONF}" <<EOF_APACHE_EVENT
-ServerTokens Prod
-ServerSignature Off
-
-<IfModule mpm_event_module>
-    StartServers             ${START_WORKERS}
-    MinSpareThreads          25
-    MaxSpareThreads          75
-    ThreadLimit              64
-    ThreadsPerChild          25
-    MaxRequestWorkers        ${APACHE_MAX_REQUEST_WORKERS}
-    MaxConnectionsPerChild   ${MAX_REQUESTS_PER_CHILD}
-</IfModule>
-EOF_APACHE_EVENT
-
-else
-    cat > "${APACHE_MPM_CONF}" <<EOF_APACHE_PREFORK
-ServerTokens Prod
-ServerSignature Off
-
-<IfModule mpm_prefork_module>
-    StartServers             ${START_WORKERS}
-    MinSpareServers          ${MIN_SPARE_WORKERS}
-    MaxSpareServers          ${MAX_SPARE_WORKERS}
-    ServerLimit              ${MAX_WORKERS}
-    MaxRequestWorkers        ${MAX_WORKERS}
-    MaxConnectionsPerChild   ${MAX_REQUESTS_PER_CHILD}
-</IfModule>
-EOF_APACHE_PREFORK
+    touch "${FPM_RUNTIME_CONF}"
 fi
 
-echo "[system-init] Runtime initialization complete. Handing control over to: $*"
-exec "$@"
+chown -R "${APACHE_RUN_USER}:${APACHE_RUN_GROUP}" \
+    "${APP_ROOT}" \
+    "${CONFIG_ROOT}" \
+    "${FILES_DIR}" \
+    /var/run/apache2 \
+    /var/lock/apache2 \
+    /var/log/apache2 \
+    /var/run/php \
+    /etc/apache2
+
+if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
+    chown "${APACHE_RUN_USER}:${APACHE_RUN_GROUP}" \
+        "${FPM_RUNTIME_CONF}" \
+        /usr/local/etc/php-fpm.d/zz-docker.conf
+fi
+
+chmod -R 755 "${CONFIG_ROOT}" "${APP_ROOT}" /etc/apache2
+chmod -R 775 "${FILES_DIR}" /var/run/php /var/run/apache2 /var/lock/apache2 /var/log/apache2
