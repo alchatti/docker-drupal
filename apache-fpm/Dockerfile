@@ -97,6 +97,7 @@ ENV DRUPAL_RUNTIME_MODE=s6-fpm \
 
 RUN set -eux; \
   apt-get update; \
+  apt-get upgrade -y; \
   apt-get install -y --no-install-recommends \
     apache2 \
     bash \
