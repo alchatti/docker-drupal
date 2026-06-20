@@ -78,7 +78,6 @@ COPY --chmod=755 scripts/ /usr/local/bin/
 
 RUN set -eux; \
   install-php-dependencies.sh; \
-  install-runtimes.sh --mariadb; \
   configure-drupal-runtime.sh; \
   chown -R www-data:www-data \
     "${APP_ROOT}" \
@@ -87,7 +86,9 @@ RUN set -eux; \
     /var/run/apache2 \
     /var/lock/apache2 \
     /var/log/apache2 \
-    /etc/apache2
+    /etc/apache2; \
+    # Runtime Dependency
+    install-runtimes.sh --mariadb
 
 WORKDIR /var/www/html
 
