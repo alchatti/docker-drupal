@@ -110,7 +110,6 @@ COPY --chmod=755 scripts/ /usr/local/bin/
 
 RUN set -eux; \
   install-php-dependencies.sh; \
-  install-runtimes.sh --mariadb; \
   configure-drupal-runtime.sh; \
   generate-s6-services.sh; \
   touch "${FPM_RUNTIME_CONF}"; \
@@ -127,7 +126,10 @@ RUN set -eux; \
     "${FPM_RUNTIME_CONF}"; \
   chmod +x \
     /etc/s6-overlay/s6-rc.d/php-fpm/run \
-    /etc/s6-overlay/s6-rc.d/apache/run
+    /etc/s6-overlay/s6-rc.d/apache/run ; \
+    # Runtime Dependency
+    install-runtimes.sh --mariadb
+    
 
 WORKDIR /var/www/html
 
