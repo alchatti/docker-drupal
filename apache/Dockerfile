@@ -12,7 +12,8 @@ ARG OS
 
 LABEL org.opencontainers.image.title="Drupal Apache mod_php runtime" \
   org.opencontainers.image.description="Drupal runtime using Apache prefork MPM and mod_php" \
-  org.opencontainers.image.base.name="php:${PHP}-apache-${OS}"
+  org.opencontainers.image.base.name="php:${PHP}-apache-${OS}" \
+  org.opencontainers.image.source="https://github.com/alchatti/docker-drupal"
 
 ENV DRUPAL_RUNTIME_MODE=mod_php \
   DRUPAL_SUBDIR= \
