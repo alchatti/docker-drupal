@@ -8,8 +8,6 @@ services:
     image: alchatti/drupal:apache
     environment:
       - DRUPAL_SUBDIR=${DRUPAL_SUBDIR}
-    expose:
-      - "8080" # Update internal port exposure
     labels:
       - "traefik.enable=true"
       
