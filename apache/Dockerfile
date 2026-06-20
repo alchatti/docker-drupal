@@ -67,6 +67,7 @@ ENV DRUPAL_RUNTIME_MODE=mod_php \
 
 RUN set -eux; \
   apt-get update; \
+  apt-get upgrade -y; \
   apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
