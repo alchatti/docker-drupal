@@ -2,38 +2,22 @@
 set -euo pipefail
 
 # Build-time Apache/PHP layout for Drupal.
-# Works for both:
-#   DRUPAL_RUNTIME_MODE=s6-fpm  -> Apache event MPM + proxy_fcgi + PHP-FPM socket
-#   DRUPAL_RUNTIME_MODE=mod_php -> Apache prefork + mod_php
+# Assumes required defaults are supplied by Dockerfile ENV.
 
 set -x
 
-DRUPAL_RUNTIME_MODE="${DRUPAL_RUNTIME_MODE:-auto}"
-APACHE_PORT="${APACHE_PORT:-8080}"
-APP_ROOT="${APP_ROOT:-/var/www/html}"
-DOC_ROOT="${DOC_ROOT:-/var/www/html/web}"
+APACHE_CONFIG_DIR="${CONFIG_ROOT}/apache"
+PHP_CONF_DIR="/usr/local/etc/php/conf.d"
 
-CONFIG_ROOT="${CONFIG_ROOT:-/_config}"
-APACHE_CONFIG_DIR="${APACHE_CONFIG_DIR:-${CONFIG_ROOT}/apache}"
-PHP_CONFIG_DIR="${PHP_CONFIG_DIR:-${CONFIG_ROOT}/php}"
-FPM_RUNTIME_CONF="${FPM_RUNTIME_CONF:-/usr/local/etc/php-fpm.d/zz-runtime.conf}"
-FPM_SOCKET="${FPM_SOCKET:-/var/run/php/php-fpm.sock}"
-
-FILES_DIR="${FILES_DIR:-/mnt/files}"
-
-APACHE_USER="${APACHE_USER:-www-data}"
-APACHE_GROUP="${APACHE_GROUP:-www-data}"
-
-APACHE_PORTS_CONF="${APACHE_PORTS_CONF:-/etc/apache2/ports.conf}"
-APACHE_DEFAULT_SITE="${APACHE_DEFAULT_SITE:-/etc/apache2/sites-available/000-default.conf}"
-APACHE_MAIN_CONF="${APACHE_MAIN_CONF:-/etc/apache2/apache2.conf}"
-APACHE_SECURITY_CONF="${APACHE_SECURITY_CONF:-/etc/apache2/conf-available/security.conf}"
+APACHE_PORTS_CONF="/etc/apache2/ports.conf"
+APACHE_DEFAULT_SITE="/etc/apache2/sites-available/000-default.conf"
+APACHE_MAIN_CONF="/etc/apache2/apache2.conf"
+APACHE_SECURITY_CONF="/etc/apache2/conf-available/security.conf"
 
 mkdir -p \
     "${APP_ROOT}" \
     "${DOC_ROOT}" \
     "${APACHE_CONFIG_DIR}" \
-    "${PHP_CONFIG_DIR}" \
     "${FILES_DIR}/public" \
     "${FILES_DIR}/private" \
     "${FILES_DIR}/tmp" \
@@ -47,16 +31,17 @@ touch \
     "${APACHE_CONFIG_DIR}/apache-mpm.conf" \
     "${APACHE_CONFIG_DIR}/drupal-runtime.conf"
 
-if command -v a2enmod >/dev/null 2>&1; then
-    a2enmod rewrite alias expires headers
+a2enmod rewrite alias expires headers
 
-    if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
-        a2dismod mpm_prefork || true
-        a2enmod mpm_event proxy proxy_fcgi setenvif
-    elif [ "${DRUPAL_RUNTIME_MODE}" = "mod_php" ]; then
-        a2dismod mpm_event || true
-        a2enmod mpm_prefork
-    fi
+if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
+    a2dismod mpm_prefork || true
+    a2enmod mpm_event proxy proxy_fcgi setenvif
+elif [ "${DRUPAL_RUNTIME_MODE}" = "mod_php" ]; then
+    a2dismod mpm_event || true
+    a2enmod mpm_prefork
+else
+    echo "ERROR: Unsupported DRUPAL_RUNTIME_MODE=${DRUPAL_RUNTIME_MODE}" >&2
+    exit 1
 fi
 
 cat > "${APACHE_PORTS_CONF}" <<EOF_PORTS
@@ -64,6 +49,7 @@ Listen ${APACHE_PORT}
 EOF_PORTS
 
 PHP_HANDLER=""
+
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
     PHP_HANDLER=$(cat <<EOF_HANDLER
 
@@ -102,7 +88,8 @@ if [ -f "${APACHE_SECURITY_CONF}" ]; then
     sed -i 's/^ServerSignature .*/ServerSignature Off/g' "${APACHE_SECURITY_CONF}"
 fi
 
-cat > "${PHP_CONFIG_DIR}/docker-php-drupal-recommended.ini" <<'EOF_INI'
+cat > "${PHP_CONF_DIR}/docker-php-drupal-recommended.ini" <<'EOF_INI'
+memory_limit=${PHP_MEMORY_LIMIT}
 output_buffering=${PHP_OUTPUT_BUFFERING}
 upload_max_filesize=${PHP_UPLOAD_MAX_FILESIZE}
 post_max_size=${PHP_POST_MAX_SIZE}
@@ -114,6 +101,7 @@ date.timezone=${TZ}
 
 opcache.enable=${PHP_OPCACHE_ENABLE}
 opcache.enable_cli=${PHP_OPCACHE_ENABLE_CLI}
+opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}
 opcache.interned_strings_buffer=${PHP_OPCACHE_INTERNED_STRINGS_BUFFER}
 opcache.max_accelerated_files=${PHP_OPCACHE_MAX_ACCEL_FILES}
 opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}
@@ -124,20 +112,23 @@ if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
     cat > /usr/local/etc/php-fpm.d/zz-docker.conf <<EOF_FPM_SOCKET
 [global]
 daemonize = no
+
 [www]
-;; Rootless override www.conf
 user =
 group =
-;; Socket permissions for Apache to connect to PHP-FPM
 listen = ${FPM_SOCKET}
-listen.owner = ${APACHE_USER}
-listen.group = ${APACHE_GROUP}
+listen.owner = ${APACHE_RUN_USER}
+listen.group = ${APACHE_RUN_GROUP}
 listen.mode = 0660
+clear_env = no
+catch_workers_output = yes
+decorate_workers_output = no
 EOF_FPM_SOCKET
+
     touch "${FPM_RUNTIME_CONF}"
 fi
 
-chown -R "${APACHE_USER}:${APACHE_GROUP}" \
+chown -R "${APACHE_RUN_USER}:${APACHE_RUN_GROUP}" \
     "${APP_ROOT}" \
     "${CONFIG_ROOT}" \
     "${FILES_DIR}" \
@@ -148,7 +139,9 @@ chown -R "${APACHE_USER}:${APACHE_GROUP}" \
     /etc/apache2
 
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
-    chown "${APACHE_USER}:${APACHE_GROUP}" "${FPM_RUNTIME_CONF}" /usr/local/etc/php-fpm.d/zz-docker.conf
+    chown "${APACHE_RUN_USER}:${APACHE_RUN_GROUP}" \
+        "${FPM_RUNTIME_CONF}" \
+        /usr/local/etc/php-fpm.d/zz-docker.conf
 fi
 
 chmod -R 755 "${CONFIG_ROOT}" "${APP_ROOT}" /etc/apache2
