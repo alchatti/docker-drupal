@@ -30,10 +30,10 @@ jobs:
           },
           "fpm-apache": {},
           "apache": {
-            "test_command": "docker rm -f apache-php-test >/dev/null 2>&1 || true; docker run -d --name apache-php-test -p 8080:8080 -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs apache-php-test || true; docker rm -f apache-php-test || true; }; trap cleanup EXIT; sleep 8; docker exec apache-php-test verify-apache-php.sh"
+            "test_command": "NAME=\"apache-php-test-${IMAGE//[^a-zA-Z0-9_.-]/-}\"; docker rm -f \"$NAME\" >/dev/null 2>&1 || true; docker run -d --name \"$NAME\" -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs \"$NAME\" || true; docker rm -f \"$NAME\" || true; }; trap cleanup EXIT; for i in $(seq 1 30); do if docker exec \"$NAME\" verify-apache-php.sh; then exit 0; fi; sleep 2; done; echo \"ERROR: Apache PHP verification failed after retries\" >&2; exit 1"
           },
           "apache-fpm": {
-            "test_command": "docker rm -f apache-php-test >/dev/null 2>&1 || true; docker run -d --name apache-php-test -p 8080:8080 -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs apache-php-test || true; docker rm -f apache-php-test || true; }; trap cleanup EXIT; sleep 8; docker exec apache-php-test verify-apache-php.sh"
+            "test_command": "NAME=\"apache-php-test-${IMAGE//[^a-zA-Z0-9_.-]/-}\"; docker rm -f \"$NAME\" >/dev/null 2>&1 || true; docker run -d --name \"$NAME\" -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs \"$NAME\" || true; docker rm -f \"$NAME\" || true; }; trap cleanup EXIT; for i in $(seq 1 30); do if docker exec \"$NAME\" verify-apache-php.sh; then exit 0; fi; sleep 2; done; echo \"ERROR: Apache PHP-FPM verification failed after retries\" >&2; exit 1"
           }
         }
 
