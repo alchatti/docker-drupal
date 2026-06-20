@@ -36,6 +36,7 @@ COPY --chmod=+x scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
+      7z \
       bash \
       curl \
       ca-certificates \
