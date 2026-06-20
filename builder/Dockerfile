@@ -35,6 +35,7 @@ COPY --chmod=+x scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 # Install Node.js from official Node.js binary tarball, then install PHP deps
 RUN set -eux; \
     apt-get update; \
+    apt-get upgrade -y; \
     apt-get install -y --no-install-recommends \
       bash \
       curl \
