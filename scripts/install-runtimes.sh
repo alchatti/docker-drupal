@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build-time optional runtime packages and PECL extensions.
+# Optional runtime packages and PHP extensions.
+# Simple mode: installed packages remain installed.
+# Intended for official Debian-based PHP Docker images.
 
 set -x
 
 INSTALL_MARIADB=false
 INSTALL_POSTGRESQL=false
+INSTALL_SQLITE=false
 INSTALL_REDIS=false
 INSTALL_MEMCACHED=false
 INSTALL_IMAGICK=false
@@ -16,9 +19,10 @@ usage() {
 Usage:
   install-runtimes.sh [options]
 
-Database clients:
+Database clients / extensions:
   --mariadb       Install MariaDB client
   --postgresql    Install PostgreSQL client
+  --sqlite        Install SQLite CLI and PHP sqlite3/pdo_sqlite extensions
 
 PHP PECL extensions:
   --redis         Install PHP Redis extension
@@ -27,7 +31,7 @@ PHP PECL extensions:
   --imagick       Install PHP Imagick extension
 
 Groups:
-  --db            Install MariaDB and PostgreSQL clients
+  --db            Install MariaDB, PostgreSQL, and SQLite support
   --pecl          Install redis, memcached, and imagick
   --all           Install everything
 
@@ -38,14 +42,28 @@ USAGE
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --mariadb|--mysql) INSTALL_MARIADB=true ;;
-        --postgresql|--postgres|--pgsql) INSTALL_POSTGRESQL=true ;;
-        --redis) INSTALL_REDIS=true ;;
-        --memcached|--memcache) INSTALL_MEMCACHED=true ;;
-        --imagick) INSTALL_IMAGICK=true ;;
+        --mariadb|--mysql)
+            INSTALL_MARIADB=true
+            ;;
+        --postgresql|--postgres|--pgsql)
+            INSTALL_POSTGRESQL=true
+            ;;
+        --sqlite|--sqlite3)
+            INSTALL_SQLITE=true
+            ;;
+        --redis)
+            INSTALL_REDIS=true
+            ;;
+        --memcached|--memcache)
+            INSTALL_MEMCACHED=true
+            ;;
+        --imagick)
+            INSTALL_IMAGICK=true
+            ;;
         --db)
             INSTALL_MARIADB=true
             INSTALL_POSTGRESQL=true
+            INSTALL_SQLITE=true
             ;;
         --pecl)
             INSTALL_REDIS=true
@@ -55,6 +73,7 @@ while [ "$#" -gt 0 ]; do
         --all)
             INSTALL_MARIADB=true
             INSTALL_POSTGRESQL=true
+            INSTALL_SQLITE=true
             INSTALL_REDIS=true
             INSTALL_MEMCACHED=true
             INSTALL_IMAGICK=true
@@ -69,11 +88,13 @@ while [ "$#" -gt 0 ]; do
             exit 1
             ;;
     esac
+
     shift
 done
 
 if [ "${INSTALL_MARIADB}" = false ] \
     && [ "${INSTALL_POSTGRESQL}" = false ] \
+    && [ "${INSTALL_SQLITE}" = false ] \
     && [ "${INSTALL_REDIS}" = false ] \
     && [ "${INSTALL_MEMCACHED}" = false ] \
     && [ "${INSTALL_IMAGICK}" = false ]; then
@@ -83,46 +104,50 @@ if [ "${INSTALL_MARIADB}" = false ] \
 fi
 
 NEEDS_PECL=false
+
 if [ "${INSTALL_REDIS}" = true ] \
     || [ "${INSTALL_MEMCACHED}" = true ] \
     || [ "${INSTALL_IMAGICK}" = true ]; then
     NEEDS_PECL=true
 fi
 
-if [ "${NEEDS_PECL}" = true ]; then
-    command -v docker-php-ext-enable >/dev/null 2>&1 || {
-        echo "ERROR: docker-php-ext-enable was not found." >&2
-        exit 1
-    }
-    command -v pecl >/dev/null 2>&1 || {
-        echo "ERROR: pecl was not found." >&2
-        exit 1
-    }
-fi
-
-savedAptMark="$(apt-mark showmanual)"
-
 apt-get update
 
-runtimeDeps=""
-[ "${INSTALL_MARIADB}" = true ] && runtimeDeps="${runtimeDeps} mariadb-client"
-[ "${INSTALL_POSTGRESQL}" = true ] && runtimeDeps="${runtimeDeps} postgresql-client"
+packages=""
 
-if [ -n "${runtimeDeps}" ]; then
-    # shellcheck disable=SC2086
-    apt-get install -y --no-install-recommends ${runtimeDeps}
+if [ "${INSTALL_MARIADB}" = true ]; then
+    packages="${packages} mariadb-client"
 fi
 
-buildDeps=""
-if [ "${INSTALL_REDIS}" = true ] || [ "${INSTALL_MEMCACHED}" = true ] || [ "${INSTALL_IMAGICK}" = true ]; then
-    buildDeps="${PHPIZE_DEPS:-autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c}"
+if [ "${INSTALL_POSTGRESQL}" = true ]; then
+    packages="${packages} postgresql-client"
 fi
-[ "${INSTALL_MEMCACHED}" = true ] && buildDeps="${buildDeps} libmemcached-dev zlib1g-dev"
-[ "${INSTALL_IMAGICK}" = true ] && buildDeps="${buildDeps} libmagickwand-dev"
 
-if [ -n "${buildDeps}" ]; then
+if [ "${INSTALL_SQLITE}" = true ]; then
+    packages="${packages} sqlite3 libsqlite3-dev"
+fi
+
+if [ "${NEEDS_PECL}" = true ]; then
+    packages="${packages} ${PHPIZE_DEPS:-autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c}"
+fi
+
+if [ "${INSTALL_MEMCACHED}" = true ]; then
+    packages="${packages} libmemcached-dev zlib1g-dev"
+fi
+
+if [ "${INSTALL_IMAGICK}" = true ]; then
+    packages="${packages} libmagickwand-dev"
+fi
+
+if [ -n "${packages}" ]; then
     # shellcheck disable=SC2086
-    apt-get install -y --no-install-recommends ${buildDeps}
+    apt-get install -y --no-install-recommends ${packages}
+fi
+
+if [ "${INSTALL_SQLITE}" = true ]; then
+    docker-php-ext-install -j "$(nproc)" \
+        sqlite3 \
+        pdo_sqlite
 fi
 
 if [ "${INSTALL_REDIS}" = true ]; then
@@ -140,33 +165,4 @@ if [ "${INSTALL_IMAGICK}" = true ]; then
     docker-php-ext-enable imagick
 fi
 
-apt-mark auto '.*' >/dev/null
-# shellcheck disable=SC2086
-apt-mark manual ${savedAptMark}
-
-if [ -n "${runtimeDeps}" ]; then
-    # shellcheck disable=SC2086
-    apt-mark manual ${runtimeDeps}
-fi
-
-if [ "${NEEDS_PECL}" = true ]; then
-    extensionDir="$(php -r 'echo ini_get("extension_dir");')"
-    if find "${extensionDir}" -name '*.so' -type f | grep -q .; then
-        find "${extensionDir}" -name '*.so' -type f -print0 \
-            | xargs -0 ldd \
-            | awk '/=>/ {
-                so = $(NF-1)
-                if (index(so, "/usr/local/") == 1) next
-                gsub("^/(usr/)?", "", so)
-                printf "*%s\n", so
-            }' \
-            | sort -u \
-            | xargs -r dpkg-query -S \
-            | cut -d: -f1 \
-            | sort -u \
-            | xargs -r apt-mark manual
-    fi
-fi
-
-apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 rm -rf /tmp/pear ~/.pearrc /var/lib/apt/lists/*
