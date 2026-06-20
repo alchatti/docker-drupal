@@ -38,10 +38,32 @@ jobs:
 
           USER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
+          REF_NAME="${GITHUB_REF_NAME:-${{ github.ref_name }}}"
 
           # Clean 'docker-' prefix:
           # docker-drupal -> drupal
           CLEAN_REPO="${REPO#docker-}"
+
+          # Add branch prefix only when branch is not main.
+          # Example:
+          #   main                  -> no prefix
+          #   feature/test-cache    -> feature-test-cache-
+          if [ "${REF_NAME}" = "main" ]; then
+            BRANCH_PREFIX=""
+          else
+            BRANCH_SLUG="$(
+              printf '%s' "${REF_NAME}" \
+                | tr '[:upper:]' '[:lower:]' \
+                | sed -E 's|[^a-z0-9_.-]+|-|g; s|^-+||; s|-+$||' \
+                | cut -c1-40
+            )"
+
+            if [ -z "${BRANCH_SLUG}" ]; then
+              BRANCH_SLUG="branch"
+            fi
+
+            BRANCH_PREFIX="${BRANCH_SLUG}-"
+          fi
 
           readarray -t PHP_ARR < <(echo "${PHP_VERSIONS}" | jq -r '.[]')
           readarray -t OS_ARR < <(echo "${OS_VERSIONS}" | jq -r '.[]')
@@ -65,7 +87,8 @@ jobs:
                   --arg php "${PHP}" \
                   --arg os "${OS}" \
                   --arg latest_php "${LATEST_PHP}" \
-                  --arg latest_os "${LATEST_OS}" '
+                  --arg latest_os "${LATEST_OS}" \
+                  --arg branch_prefix "${BRANCH_PREFIX}" '
                   to_entries | map(
                     .key as $blueprint_name
                     | (.key | split("@")) as $parts
@@ -107,10 +130,10 @@ jobs:
 
                     | ($user + "/" + $repo) as $base_tag
 
-                    | .tags = ($base_tag + ":" + $php + "-" + $variant + "-" + $os)
+                    | .tags = ($base_tag + ":" + $branch_prefix + $php + "-" + $variant + "-" + $os)
 
                     | if $php == $latest_php and $os == $latest_os then
-                        .tags = .tags + "\n" + $base_tag + ":" + $variant
+                        .tags = .tags + "\n" + $base_tag + ":" + $branch_prefix + $variant
                       else
                         .
                       end
