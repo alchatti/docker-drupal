@@ -24,8 +24,8 @@
     "*.log",
     ".env",
     ".env.*", 
-    ".cache"
-    ".DS_Store"
+    ".cache",
+    ".DS_Store",
     ".dll"
   ],
   "removeDirs": [
@@ -37,7 +37,7 @@
     "__mocks__",
     ".storybook",
     ".vscode",
-    ".idea"
+    ".idea",
     ".git",
     ".cache"
   ],
