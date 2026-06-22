@@ -53,7 +53,7 @@ function removeDir(string $path): void
             RecursiveIteratorIterator::CHILD_FIRST
         );
     } catch (UnexpectedValueException $e) {
-        throw new RuntimeException("Failed to iterate directory for removal: $path", 0, $e);
+        throw new RuntimeException("Failed to iterate directory for removal: $path - " . $e->getMessage(), 0, $e);
     }
 
     foreach ($items as $item) {
