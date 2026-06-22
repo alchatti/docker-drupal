@@ -115,7 +115,6 @@ RUN set -eux; \
   install-php-dependencies.sh; \
   configure-drupal-runtime.sh; \
   generate-s6-services.sh; \
-  touch "${FPM_RUNTIME_CONF}"; \
   chown -R www-data:www-data \
     "${APP_ROOT}" \
     /var/www \
@@ -125,17 +124,11 @@ RUN set -eux; \
     /var/lock/apache2 \
     /var/log/apache2 \
     /var/run/php \
-    /etc/apache2 \
-    /etc/s6-overlay \
-    "${FPM_RUNTIME_CONF}"; \
-  chmod +x \
-    /etc/s6-overlay/s6-rc.d/php-fpm/run \
-    /etc/s6-overlay/s6-rc.d/apache/run ; \
+    /etc/apache2; \
     # Runtime Dependency
     install-runtimes.sh --mariadb
-    
 
-WORKDIR /var/www/html
+WORKDIR /app
 
 USER www-data
 
