@@ -60,13 +60,13 @@ function removeDir(string $path): void
         if ($item->isDir()) {
             if (!rmdir($item->getRealPath())) {
                 $error = error_get_last();
-                $reason = $error['message'] ?? 'unknown error';
+                $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
                 throw new RuntimeException("Failed to remove directory: " . $item->getRealPath() . " - $reason");
             }
         } else {
             if (!unlink($item->getRealPath())) {
                 $error = error_get_last();
-                $reason = $error['message'] ?? 'unknown error';
+                $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
                 throw new RuntimeException("Failed to remove file: " . $item->getRealPath() . " - $reason");
             }
         }
@@ -74,7 +74,7 @@ function removeDir(string $path): void
 
     if (!rmdir($path)) {
         $error = error_get_last();
-        $reason = $error['message'] ?? 'unknown error';
+        $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
         throw new RuntimeException("Failed to remove directory: $path - $reason");
     }
 }
