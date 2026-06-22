@@ -45,6 +45,11 @@ resolve_doc_root() {
             ;;
     esac
 
+    if [ -z "${APP_ROOT}" ]; then
+        echo "ERROR: APP_ROOT must not be empty." >&2
+        exit 1
+    fi
+
     if [[ "${APP_ROOT}" != /* ]]; then
         echo "ERROR: APP_ROOT must be an absolute path. Current value: ${APP_ROOT}" >&2
         exit 1
