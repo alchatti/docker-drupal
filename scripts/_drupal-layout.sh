@@ -45,13 +45,13 @@ resolve_doc_root() {
             ;;
     esac
 
-    if [ -z "${DOC_ROOT}" ]; then
-        DOC_ROOT="${APP_ROOT}/${public_dir}"
-    fi
-
     if [[ "${APP_ROOT}" != /* ]]; then
         echo "ERROR: APP_ROOT must be an absolute path. Current value: ${APP_ROOT}" >&2
         exit 1
+    fi
+
+    if [ -z "${DOC_ROOT}" ]; then
+        DOC_ROOT="${APP_ROOT}/${public_dir}"
     fi
 
     if [[ "${DOC_ROOT}" != /* ]]; then
