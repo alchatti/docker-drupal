@@ -8,6 +8,11 @@ clean_path_segment() {
 }
 
 safe_rm_rf() {
+    if [ "$#" -ne 1 ]; then
+        echo "ERROR: safe_rm_rf expects exactly one path argument." >&2
+        exit 1
+    fi
+
     local target="$1"
 
     case "${target}" in

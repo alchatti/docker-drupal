@@ -47,10 +47,14 @@ function isProtected(string $relative, array $protectedPaths): bool
  */
 function removeDir(string $path): void
 {
-    $items = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::CHILD_FIRST
-    );
+    try {
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+    } catch (UnexpectedValueException $e) {
+        throw new RuntimeException("Failed to iterate directory for removal: $path", 0, $e);
+    }
 
     foreach ($items as $item) {
         if ($item->isDir()) {
