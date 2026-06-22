@@ -95,59 +95,8 @@ APACHE_MPM_CONF="${APACHE_CONFIG_DIR}/apache-mpm.conf"
 
 mkdir -p "${APACHE_CONFIG_DIR}"
 
-clean_path_segment() {
-    printf '%s' "$1" | sed 's|^/||;s|/$||'
-}
-
-safe_rm_rf() {
-    local target="$1"
-
-    case "${target}" in
-        ""|"/"|"/app"|"/app/"|"/var"|"/var/"|"/var/www"|"/var/www/"|"${APP_ROOT}"|"${APP_ROOT}/"|"${DOC_ROOT}"|"${DOC_ROOT}/")
-            echo "ERROR: Refusing to remove unsafe path: ${target}" >&2
-            exit 1
-            ;;
-    esac
-
-    rm -rf "${target}"
-}
-
-resolve_doc_root() {
-    local public_dir
-
-    public_dir="$(clean_path_segment "${DRUPAL_PUBLIC_DIR:-web}")"
-
-    case "${public_dir}" in
-        web|docroot)
-            ;;
-        *)
-            echo "ERROR: Invalid DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
-            echo "Allowed values: web, docroot" >&2
-            exit 1
-            ;;
-    esac
-
-    if [ -z "${DOC_ROOT}" ]; then
-        DOC_ROOT="${APP_ROOT}/${public_dir}"
-    fi
-
-    if [[ "${APP_ROOT}" != /* ]]; then
-        echo "ERROR: APP_ROOT must be an absolute path. Current value: ${APP_ROOT}" >&2
-        exit 1
-    fi
-
-    if [[ "${DOC_ROOT}" != /* ]]; then
-        echo "ERROR: DOC_ROOT must be an absolute path. Current value: ${DOC_ROOT}" >&2
-        exit 1
-    fi
-
-    if [[ "${PUBLIC_ROOT}" != /* ]]; then
-        echo "ERROR: PUBLIC_ROOT must be an absolute path. Current value: ${PUBLIC_ROOT}" >&2
-        exit 1
-    fi
-
-    export DOC_ROOT
-}
+# shellcheck source=_drupal-layout.sh
+. /usr/local/bin/_drupal-layout.sh
 
 create_missing_app_index() {
     if [ -f "${DOC_ROOT}/index.php" ]; then
