@@ -21,8 +21,10 @@ TZ="${TZ:-Asia/Dubai}"
 CURL_RETRIES="${CURL_RETRIES:-10}"
 CURL_RETRY_DELAY="${CURL_RETRY_DELAY:-2}"
 
-# Optional.
-# Example:
+VERIFY_BOOTSTRAP_DOCROOT="${VERIFY_BOOTSTRAP_DOCROOT:-1}"
+VERIFY_REPAIR_PUBLIC_MOUNT="${VERIFY_REPAIR_PUBLIC_MOUNT:-1}"
+
+# Optional:
 #   EXPECTED_PHP_SAPI=apache2handler
 #   EXPECTED_PHP_SAPI=fpm-fcgi
 EXPECTED_PHP_SAPI="${EXPECTED_PHP_SAPI:-}"
@@ -58,11 +60,74 @@ resolve_doc_root() {
     export DOC_ROOT
 }
 
+safe_rm_rf() {
+    local target="$1"
+
+    case "${target}" in
+        ""|"/"|"/app"|"/app/"|"${APP_ROOT}"|"${APP_ROOT}/"|"${DOC_ROOT}"|"${DOC_ROOT}/")
+            echo "ERROR: Refusing to remove unsafe path: ${target}" >&2
+            exit 1
+            ;;
+    esac
+
+    rm -rf "${target}"
+}
+
+bootstrap_doc_root() {
+    if [ -d "${DOC_ROOT}" ]; then
+        return
+    fi
+
+    if [ "${VERIFY_BOOTSTRAP_DOCROOT}" != "1" ]; then
+        echo "ERROR: Resolved document root does not exist: ${DOC_ROOT}" >&2
+        echo "Set VERIFY_BOOTSTRAP_DOCROOT=1 to allow CI bootstrap." >&2
+        exit 1
+    fi
+
+    echo "Creating missing document root for CI: ${DOC_ROOT}"
+    mkdir -p "${DOC_ROOT}"
+}
+
+prepare_public_mount() {
+    local clean_subdir="$1"
+    local mount_path
+
+    if [ "${VERIFY_REPAIR_PUBLIC_MOUNT}" != "1" ]; then
+        return
+    fi
+
+    mkdir -p "$(dirname "${PUBLIC_ROOT}")"
+
+    if [ -n "${clean_subdir}" ]; then
+        if [[ ! "${clean_subdir}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "ERROR: Invalid DRUPAL_SUBDIR=${DRUPAL_SUBDIR}" >&2
+            echo "Allowed characters: letters, numbers, dot, underscore and hyphen." >&2
+            exit 1
+        fi
+
+        if [ -L "${PUBLIC_ROOT}" ]; then
+            safe_rm_rf "${PUBLIC_ROOT}"
+        fi
+
+        mkdir -p "${PUBLIC_ROOT}"
+
+        mount_path="${PUBLIC_ROOT}/${clean_subdir}"
+        safe_rm_rf "${mount_path}"
+        ln -sfn "${DOC_ROOT}" "${mount_path}"
+
+        echo "Verified public mount: ${mount_path} -> ${DOC_ROOT}"
+    else
+        safe_rm_rf "${PUBLIC_ROOT}"
+        ln -sfn "${DOC_ROOT}" "${PUBLIC_ROOT}"
+
+        echo "Verified public mount: ${PUBLIC_ROOT} -> ${DOC_ROOT}"
+    fi
+}
+
 resolve_url() {
-    local clean_subdir
+    local clean_subdir="$1"
     local test_path
 
-    clean_subdir="$(clean_path_segment "${DRUPAL_SUBDIR}")"
     test_path="/${TEST_FILE}"
 
     if [ -n "${clean_subdir}" ]; then
@@ -73,12 +138,16 @@ resolve_url() {
         PUBLIC_TEST_PATH="${PUBLIC_ROOT}/${TEST_FILE}"
     fi
 
-    CLEAN_SUBDIR="${clean_subdir}"
-    export URL PUBLIC_TEST_PATH CLEAN_SUBDIR
+    export URL PUBLIC_TEST_PATH
 }
 
 resolve_doc_root
-resolve_url
+
+CLEAN_SUBDIR="$(clean_path_segment "${DRUPAL_SUBDIR}")"
+
+bootstrap_doc_root
+prepare_public_mount "${CLEAN_SUBDIR}"
+resolve_url "${CLEAN_SUBDIR}"
 
 TEST_FILE_PATH="${DOC_ROOT}/${TEST_FILE}"
 
@@ -93,30 +162,6 @@ echo "Test file path: ${TEST_FILE_PATH}"
 echo "Public test path: ${PUBLIC_TEST_PATH}"
 echo "URL: ${URL}"
 echo "Expected response: ${EXPECTED_MESSAGE}"
-
-if [ ! -d "${DOC_ROOT}" ]; then
-    echo "ERROR: Resolved document root does not exist: ${DOC_ROOT}" >&2
-    echo "Check APP_ROOT, DRUPAL_PUBLIC_DIR, or DOC_ROOT." >&2
-    exit 1
-fi
-
-if [ ! -d "${PUBLIC_ROOT}" ] && [ ! -L "${PUBLIC_ROOT}" ]; then
-    echo "ERROR: Apache public root does not exist: ${PUBLIC_ROOT}" >&2
-    echo "The entrypoint should create this as a symlink or directory." >&2
-    exit 1
-fi
-
-if [ -n "${CLEAN_SUBDIR}" ] && [ ! -e "${PUBLIC_ROOT}/${CLEAN_SUBDIR}" ]; then
-    echo "ERROR: Expected subdirectory mount does not exist: ${PUBLIC_ROOT}/${CLEAN_SUBDIR}" >&2
-    echo "The entrypoint should create: ${PUBLIC_ROOT}/${CLEAN_SUBDIR} -> ${DOC_ROOT}" >&2
-    exit 1
-fi
-
-if [ -z "${CLEAN_SUBDIR}" ] && [ ! -e "${PUBLIC_ROOT}" ]; then
-    echo "ERROR: Expected root mount does not exist: ${PUBLIC_ROOT}" >&2
-    echo "The entrypoint should create: ${PUBLIC_ROOT} -> ${DOC_ROOT}" >&2
-    exit 1
-fi
 
 expected_message_json="$(php -r 'echo json_encode($argv[1]);' "${EXPECTED_MESSAGE}")"
 

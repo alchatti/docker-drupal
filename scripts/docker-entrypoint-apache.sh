@@ -5,13 +5,26 @@ set -euo pipefail
 #   s6-fpm  -> Apache + PHP-FPM under s6-overlay
 #   mod_php -> Apache foreground with mod_php
 #
-# Runtime controls:
+# Runtime Controls:
 #   DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
-#   APP_ROOT:            Drupal project root. Default: /app
-#   DRUPAL_PUBLIC_DIR:   Drupal public directory under APP_ROOT. Allowed: web | docroot
-#   DOC_ROOT:            Optional absolute override for Drupal public directory
-#   PUBLIC_ROOT:         Apache public root. Default: /var/www/html
-#   DRUPAL_SUBDIR:       Optional URL subdirectory, for example test-site
+#   APP_ROOT: Drupal project root, default /app
+#   DRUPAL_PUBLIC_DIR: web | docroot, default web
+#   DOC_ROOT: optional absolute override for Drupal public docroot
+#   PUBLIC_ROOT: Apache public root, default /var/www/html
+#   DRUPAL_SUBDIR: optional URL subdirectory, e.g. test-site or /test-site
+#
+# Layout:
+#   APP_ROOT=/app
+#   DRUPAL_PUBLIC_DIR=web      -> DOC_ROOT=/app/web
+#   DRUPAL_PUBLIC_DIR=docroot  -> DOC_ROOT=/app/docroot
+#
+#   DRUPAL_SUBDIR empty:
+#     /var/www/html -> /app/web or /app/docroot
+#
+#   DRUPAL_SUBDIR=test-site:
+#     /var/www/html/test-site -> /app/web or /app/docroot
+
+: "${DRUPAL_RUNTIME_MODE:=s6-fpm}"
 
 case "${DRUPAL_RUNTIME_MODE}" in
     s6-fpm)
@@ -40,20 +53,60 @@ if [ "${FIRST_ARG}" != "apache2-foreground" ] && [ "${FIRST_ARG}" != "/init" ]; 
     exec "$@"
 fi
 
-APACHE_RUNTIME_CONF="${APACHE_CONFIG_DIR}/drupal-runtime.conf"
-APACHE_MPM_CONF="${APACHE_CONFIG_DIR}/apache-mpm.conf"
-
 : "${APP_ROOT:=/app}"
 : "${PUBLIC_ROOT:=/var/www/html}"
 : "${DRUPAL_PUBLIC_DIR:=web}"
+: "${DOC_ROOT:=}"
+: "${DRUPAL_SUBDIR:=}"
+
+: "${APACHE_CONFIG_DIR:=/_config/apache}"
+: "${FPM_RUNTIME_CONF:=/usr/local/etc/php-fpm.d/zz-runtime.conf}"
+
+: "${DEFAULT_MEMORY_LIMIT_MB:=1024}"
+: "${USE_HOST_MEMORY_WHEN_UNLIMITED:=0}"
+: "${RESERVED_MEMORY_MIN_MB:=128}"
+: "${RESERVED_MEMORY_FRACTION:=10}"
+: "${PHP_MEMORY_LIMIT_MIN_MB:=128}"
+: "${PHP_MEMORY_LIMIT_MAX_MB:=768}"
+: "${OPCACHE_MIN_MB:=96}"
+: "${OPCACHE_MAX_MB:=256}"
+: "${AVG_PHP_THREAD_MB:=120}"
+: "${HEADROOM_MB:=64}"
+: "${MIN_PHP_THREADS:=2}"
+: "${MAX_PHP_THREADS_CAP:=256}"
+: "${START_WORKERS:=2}"
+: "${MIN_SPARE_WORKERS:=2}"
+: "${MAX_SPARE_WORKERS:=10}"
+: "${MAX_REQUESTS_PER_CHILD:=5000}"
+: "${APACHE_WORKERS_MULTIPLIER:=4}"
+: "${APACHE_MAX_REQUEST_WORKERS_CAP:=400}"
+
+APACHE_RUNTIME_CONF="${APACHE_CONFIG_DIR}/drupal-runtime.conf"
+APACHE_MPM_CONF="${APACHE_CONFIG_DIR}/apache-mpm.conf"
 
 mkdir -p "${APACHE_CONFIG_DIR}"
+
+clean_path_segment() {
+    printf '%s' "$1" | sed 's|^/||;s|/$||'
+}
+
+safe_rm_rf() {
+    local target="$1"
+
+    case "${target}" in
+        ""|"/"|"/app"|"/app/"|"/var"|"/var/"|"/var/www"|"/var/www/"|"${APP_ROOT}"|"${APP_ROOT}/"|"${DOC_ROOT}"|"${DOC_ROOT}/")
+            echo "ERROR: Refusing to remove unsafe path: ${target}" >&2
+            exit 1
+            ;;
+    esac
+
+    rm -rf "${target}"
+}
 
 resolve_doc_root() {
     local public_dir
 
-    public_dir="${DRUPAL_PUBLIC_DIR:-web}"
-    public_dir="$(echo "${public_dir}" | sed 's|^/||;s|/$||')"
+    public_dir="$(clean_path_segment "${DRUPAL_PUBLIC_DIR:-web}")"
 
     case "${public_dir}" in
         web|docroot)
@@ -65,8 +118,13 @@ resolve_doc_root() {
             ;;
     esac
 
-    if [ -z "${DOC_ROOT:-}" ]; then
+    if [ -z "${DOC_ROOT}" ]; then
         DOC_ROOT="${APP_ROOT}/${public_dir}"
+    fi
+
+    if [[ "${APP_ROOT}" != /* ]]; then
+        echo "ERROR: APP_ROOT must be an absolute path. Current value: ${APP_ROOT}" >&2
+        exit 1
     fi
 
     if [[ "${DOC_ROOT}" != /* ]]; then
@@ -74,22 +132,26 @@ resolve_doc_root() {
         exit 1
     fi
 
+    if [[ "${PUBLIC_ROOT}" != /* ]]; then
+        echo "ERROR: PUBLIC_ROOT must be an absolute path. Current value: ${PUBLIC_ROOT}" >&2
+        exit 1
+    fi
+
     export DOC_ROOT
 }
 
 prepare_public_root() {
-    local clean_subdir="${1:-}"
+    local clean_subdir="$1"
+    local mount_path
 
     if [ ! -d "${DOC_ROOT}" ]; then
-        echo "ERROR: Drupal docroot does not exist: ${DOC_ROOT}" >&2
-        echo "Check APP_ROOT=${APP_ROOT} and DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
-        exit 1
+        echo "[system-init] Drupal docroot does not exist yet. Creating: ${DOC_ROOT}"
+        mkdir -p "${DOC_ROOT}"
     fi
 
     if [ ! -f "${DOC_ROOT}/index.php" ]; then
-        echo "ERROR: Drupal index.php was not found under: ${DOC_ROOT}" >&2
-        echo "This does not look like a valid Drupal public directory." >&2
-        exit 1
+        echo "[system-init] WARNING: Drupal index.php was not found under: ${DOC_ROOT}"
+        echo "[system-init] Container will still start. CI or mounted application code may provide public files later."
     fi
 
     mkdir -p "$(dirname "${PUBLIC_ROOT}")"
@@ -103,15 +165,21 @@ prepare_public_root() {
 
         echo "[system-init] Mounting Drupal docroot ${DOC_ROOT} at /${clean_subdir}"
 
-        rm -rf "${PUBLIC_ROOT}"
-        mkdir -p "${PUBLIC_ROOT}"
-        ln -sfn "${DOC_ROOT}" "${PUBLIC_ROOT}/${clean_subdir}"
+        if [ -L "${PUBLIC_ROOT}" ] || [ -f "${PUBLIC_ROOT}" ]; then
+            safe_rm_rf "${PUBLIC_ROOT}"
+        fi
 
-        echo "[system-init] Symlink created: ${PUBLIC_ROOT}/${clean_subdir} -> ${DOC_ROOT}"
+        mkdir -p "${PUBLIC_ROOT}"
+
+        mount_path="${PUBLIC_ROOT}/${clean_subdir}"
+        safe_rm_rf "${mount_path}"
+        ln -sfn "${DOC_ROOT}" "${mount_path}"
+
+        echo "[system-init] Symlink created: ${mount_path} -> ${DOC_ROOT}"
     else
         echo "[system-init] Mounting Drupal docroot ${DOC_ROOT} at root"
 
-        rm -rf "${PUBLIC_ROOT}"
+        safe_rm_rf "${PUBLIC_ROOT}"
         ln -sfn "${DOC_ROOT}" "${PUBLIC_ROOT}"
 
         echo "[system-init] Symlink created: ${PUBLIC_ROOT} -> ${DOC_ROOT}"
@@ -128,7 +196,7 @@ EOF_RUNTIME
 
 resolve_doc_root
 
-CLEAN_SUBDIR="$(echo "${DRUPAL_SUBDIR:-}" | sed 's|^/||;s|/$||')"
+CLEAN_SUBDIR="$(clean_path_segment "${DRUPAL_SUBDIR}")"
 prepare_public_root "${CLEAN_SUBDIR}"
 
 get_mem_limit_mb() {
@@ -306,5 +374,12 @@ ServerSignature Off
 EOF_APACHE_PREFORK
 fi
 
-echo "[system-init] Runtime initialization complete. Handing control over to: $*"
+echo "[system-init] Runtime initialization complete."
+echo "[system-init] APP_ROOT=${APP_ROOT}"
+echo "[system-init] DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}"
+echo "[system-init] DOC_ROOT=${DOC_ROOT}"
+echo "[system-init] PUBLIC_ROOT=${PUBLIC_ROOT}"
+echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-<root>}"
+echo "[system-init] Handing control over to: $*"
+
 exec "$@"
