@@ -4,9 +4,14 @@ set -euo pipefail
 # Shared runtime entrypoint for:
 #   s6-fpm  -> Apache + PHP-FPM under s6-overlay
 #   mod_php -> Apache foreground with mod_php
-## Runtime Controls
-## - DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
-## - DRUPAL_SUBDIR: Optional subdirectory for Drupal site (e.g. /example)
+#
+# Runtime controls:
+#   DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
+#   APP_ROOT:            Drupal project root. Default: /app
+#   DRUPAL_PUBLIC_DIR:   Drupal public directory under APP_ROOT. Allowed: web | docroot
+#   DOC_ROOT:            Optional absolute override for Drupal public directory
+#   PUBLIC_ROOT:         Apache public root. Default: /var/www/html
+#   DRUPAL_SUBDIR:       Optional URL subdirectory, for example test-site
 
 case "${DRUPAL_RUNTIME_MODE}" in
     s6-fpm)
@@ -38,25 +43,93 @@ fi
 APACHE_RUNTIME_CONF="${APACHE_CONFIG_DIR}/drupal-runtime.conf"
 APACHE_MPM_CONF="${APACHE_CONFIG_DIR}/apache-mpm.conf"
 
+: "${APP_ROOT:=/app}"
+: "${PUBLIC_ROOT:=/var/www/html}"
+: "${DRUPAL_PUBLIC_DIR:=web}"
+
 mkdir -p "${APACHE_CONFIG_DIR}"
 
-if [ -n "${DRUPAL_SUBDIR}" ]; then
-    CLEAN_SUBDIR="$(echo "${DRUPAL_SUBDIR}" | sed 's|^/||;s|/$||')"
-    echo "[system-init] Activating Apache Alias for subdirectory: /${CLEAN_SUBDIR}"
+resolve_doc_root() {
+    local public_dir
 
-    cat > "${APACHE_RUNTIME_CONF}" <<EOF_ALIAS
-Alias /${CLEAN_SUBDIR} ${DOC_ROOT}
+    public_dir="${DRUPAL_PUBLIC_DIR:-web}"
+    public_dir="$(echo "${public_dir}" | sed 's|^/||;s|/$||')"
 
+    case "${public_dir}" in
+        web|docroot)
+            ;;
+        *)
+            echo "ERROR: Invalid DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
+            echo "Allowed values: web, docroot" >&2
+            exit 1
+            ;;
+    esac
+
+    if [ -z "${DOC_ROOT:-}" ]; then
+        DOC_ROOT="${APP_ROOT}/${public_dir}"
+    fi
+
+    if [[ "${DOC_ROOT}" != /* ]]; then
+        echo "ERROR: DOC_ROOT must be an absolute path. Current value: ${DOC_ROOT}" >&2
+        exit 1
+    fi
+
+    export DOC_ROOT
+}
+
+prepare_public_root() {
+    local clean_subdir="${1:-}"
+
+    if [ ! -d "${DOC_ROOT}" ]; then
+        echo "ERROR: Drupal docroot does not exist: ${DOC_ROOT}" >&2
+        echo "Check APP_ROOT=${APP_ROOT} and DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
+        exit 1
+    fi
+
+    if [ ! -f "${DOC_ROOT}/index.php" ]; then
+        echo "ERROR: Drupal index.php was not found under: ${DOC_ROOT}" >&2
+        echo "This does not look like a valid Drupal public directory." >&2
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "${PUBLIC_ROOT}")"
+
+    if [ -n "${clean_subdir}" ]; then
+        if [[ ! "${clean_subdir}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "ERROR: Invalid DRUPAL_SUBDIR=${DRUPAL_SUBDIR}" >&2
+            echo "Allowed characters: letters, numbers, dot, underscore and hyphen." >&2
+            exit 1
+        fi
+
+        echo "[system-init] Mounting Drupal docroot ${DOC_ROOT} at /${clean_subdir}"
+
+        rm -rf "${PUBLIC_ROOT}"
+        mkdir -p "${PUBLIC_ROOT}"
+        ln -sfn "${DOC_ROOT}" "${PUBLIC_ROOT}/${clean_subdir}"
+
+        echo "[system-init] Symlink created: ${PUBLIC_ROOT}/${clean_subdir} -> ${DOC_ROOT}"
+    else
+        echo "[system-init] Mounting Drupal docroot ${DOC_ROOT} at root"
+
+        rm -rf "${PUBLIC_ROOT}"
+        ln -sfn "${DOC_ROOT}" "${PUBLIC_ROOT}"
+
+        echo "[system-init] Symlink created: ${PUBLIC_ROOT} -> ${DOC_ROOT}"
+    fi
+
+    cat > "${APACHE_RUNTIME_CONF}" <<EOF_RUNTIME
 <Directory ${DOC_ROOT}>
     Options FollowSymLinks
     AllowOverride All
     Require all granted
 </Directory>
-EOF_ALIAS
-else
-    echo "[system-init] Operating at root domain level."
-    : > "${APACHE_RUNTIME_CONF}"
-fi
+EOF_RUNTIME
+}
+
+resolve_doc_root
+
+CLEAN_SUBDIR="$(echo "${DRUPAL_SUBDIR:-}" | sed 's|^/||;s|/$||')"
+prepare_public_root "${CLEAN_SUBDIR}"
 
 get_mem_limit_mb() {
     local bytes="0"

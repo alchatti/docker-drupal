@@ -41,15 +41,17 @@ LABEL org.opencontainers.image.title="Drupal Apache PHP-FPM s6 runtime" \
 
 ENV DRUPAL_RUNTIME_MODE=s6-fpm \
   DRUPAL_SUBDIR= \
+  DRUPAL_PUBLIC_DIR=web \
   APACHE_PORT=8080 \
-  APP_ROOT=/var/www/html \
-  DOC_ROOT=/var/www/html/web \
+  APP_ROOT=/app \
+  DOC_ROOT= \
+  PUBLIC_ROOT=/var/www/html \
   CONFIG_ROOT=/_config \
   APACHE_CONFIG_DIR=/_config/apache \
   FPM_RUNTIME_CONF=/usr/local/etc/php-fpm.d/zz-runtime.conf \
   FPM_SOCKET=/var/run/php/php-fpm.sock \
   FILES_DIR=/mnt/files \
-  PATH=/var/www/html/vendor/bin:${PATH} \
+  PATH=/app/vendor/bin:${PATH} \
   S6_KEEP_ENV=1 \
   S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
   S6_RUN_DIR=/var/run/apache2 \
@@ -116,6 +118,7 @@ RUN set -eux; \
   touch "${FPM_RUNTIME_CONF}"; \
   chown -R www-data:www-data \
     "${APP_ROOT}" \
+    /var/www \
     "${CONFIG_ROOT}" \
     "${FILES_DIR}" \
     /var/run/apache2 \
