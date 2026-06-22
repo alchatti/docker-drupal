@@ -64,6 +64,11 @@ resolve_doc_root() {
         exit 1
     fi
 
+    if [ -z "${PUBLIC_ROOT}" ]; then
+        echo "ERROR: PUBLIC_ROOT must not be empty." >&2
+        exit 1
+    fi
+
     if [[ "${PUBLIC_ROOT}" != /* ]]; then
         echo "ERROR: PUBLIC_ROOT must be an absolute path. Current value: ${PUBLIC_ROOT}" >&2
         exit 1
