@@ -13,6 +13,11 @@ set -euo pipefail
 #   PUBLIC_ROOT: Apache public root, default /var/www/html
 #   DRUPAL_SUBDIR: optional URL subdirectory, e.g. test-site or /test-site
 #
+# Missing app fallback:
+#   APP_MISSING_PLACEHOLDER=1
+#   APP_MISSING_HTTP_STATUS=503
+#   APP_MISSING_MESSAGE="Drupal application was not found..."
+#
 # Layout:
 #   APP_ROOT=/app
 #   DRUPAL_PUBLIC_DIR=web      -> DOC_ROOT=/app/web
@@ -58,6 +63,10 @@ fi
 : "${DRUPAL_PUBLIC_DIR:=web}"
 : "${DOC_ROOT:=}"
 : "${DRUPAL_SUBDIR:=}"
+
+: "${APP_MISSING_PLACEHOLDER:=1}"
+: "${APP_MISSING_HTTP_STATUS:=503}"
+: "${APP_MISSING_MESSAGE:=Drupal application was not found. Please mount or copy the application code into APP_ROOT and ensure DRUPAL_PUBLIC_DIR points to web or docroot.}"
 
 : "${APACHE_CONFIG_DIR:=/_config/apache}"
 : "${FPM_RUNTIME_CONF:=/usr/local/etc/php-fpm.d/zz-runtime.conf}"
@@ -140,6 +149,45 @@ resolve_doc_root() {
     export DOC_ROOT
 }
 
+create_missing_app_index() {
+    if [ -f "${DOC_ROOT}/index.php" ]; then
+        return
+    fi
+
+    if [ "${APP_MISSING_PLACEHOLDER}" != "1" ]; then
+        echo "[system-init] WARNING: Drupal index.php was not found under: ${DOC_ROOT}"
+        echo "[system-init] APP_MISSING_PLACEHOLDER is disabled; no fallback index.php will be created."
+        return
+    fi
+
+    echo "[system-init] Drupal index.php was not found under: ${DOC_ROOT}"
+    echo "[system-init] Creating fallback missing-application page: ${DOC_ROOT}/index.php"
+
+    cat > "${DOC_ROOT}/index.php" <<'PHP_MISSING_APP'
+<?php
+
+$status = (int) (getenv('APP_MISSING_HTTP_STATUS') ?: 503);
+
+if ($status < 100 || $status > 599) {
+    $status = 503;
+}
+
+$message = getenv('APP_MISSING_MESSAGE') ?: 'Drupal application was not found.';
+
+http_response_code($status);
+header('Content-Type: text/plain; charset=UTF-8');
+header('X-Drupal-Runtime: missing-application');
+
+echo $message . PHP_EOL;
+echo PHP_EOL;
+echo 'APP_ROOT=' . (getenv('APP_ROOT') ?: '/app') . PHP_EOL;
+echo 'DRUPAL_PUBLIC_DIR=' . (getenv('DRUPAL_PUBLIC_DIR') ?: 'web') . PHP_EOL;
+echo 'DOC_ROOT=' . (getenv('DOC_ROOT') ?: '') . PHP_EOL;
+PHP_MISSING_APP
+
+    chmod 0644 "${DOC_ROOT}/index.php"
+}
+
 prepare_public_root() {
     local clean_subdir="$1"
     local mount_path
@@ -149,10 +197,7 @@ prepare_public_root() {
         mkdir -p "${DOC_ROOT}"
     fi
 
-    if [ ! -f "${DOC_ROOT}/index.php" ]; then
-        echo "[system-init] WARNING: Drupal index.php was not found under: ${DOC_ROOT}"
-        echo "[system-init] Container will still start. CI or mounted application code may provide public files later."
-    fi
+    create_missing_app_index
 
     mkdir -p "$(dirname "${PUBLIC_ROOT}")"
 
