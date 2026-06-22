@@ -116,9 +116,6 @@ RUN set -eux; \
   configure-drupal-runtime.sh; \
   generate-s6-services.sh; \
   chown -R root:root /etc/s6-overlay; \
-  for file in "${FPM_RUNTIME_CONF}" /usr/local/etc/php-fpm.d/zz-docker.conf; do \
-    if [ -e "${file}" ]; then chown www-data:www-data "${file}"; fi; \
-  done; \
   chown -R www-data:www-data \
     "${APP_ROOT}" \
     /var/www \
