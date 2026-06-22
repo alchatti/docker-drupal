@@ -42,6 +42,33 @@ function isProtected(string $relative, array $protectedPaths): bool
     return false;
 }
 
+/**
+ * Recursively remove a directory and all its contents using native PHP.
+ */
+function removeDir(string $path): void
+{
+    $items = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+
+    foreach ($items as $item) {
+        if ($item->isDir()) {
+            if (!rmdir($item->getRealPath())) {
+                throw new RuntimeException("Failed to remove directory: " . $item->getRealPath());
+            }
+        } else {
+            if (!unlink($item->getRealPath())) {
+                throw new RuntimeException("Failed to remove file: " . $item->getRealPath());
+            }
+        }
+    }
+
+    if (!rmdir($path)) {
+        throw new RuntimeException("Failed to remove directory: $path");
+    }
+}
+
 $directory = new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS);
 $iterator  = new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::CHILD_FIRST);
 
@@ -58,7 +85,7 @@ foreach ($iterator as $path => $info) {
         if ($info->isDir() && fnmatch($dir, $info->getFilename())) {
             echo ($dryRun ? "[dry-run] Would remove dir: $relative\n"
                           : "Removing dir: $relative\n");
-            if (!$dryRun) exec("rm -rf \"$path\"");
+            if (!$dryRun) removeDir($path);
             continue 2;
         }
     }
