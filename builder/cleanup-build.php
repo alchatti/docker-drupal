@@ -59,17 +59,23 @@ function removeDir(string $path): void
     foreach ($items as $item) {
         if ($item->isDir()) {
             if (!rmdir($item->getRealPath())) {
-                throw new RuntimeException("Failed to remove directory: " . $item->getRealPath());
+                $error = error_get_last();
+                $reason = $error['message'] ?? 'unknown error';
+                throw new RuntimeException("Failed to remove directory: " . $item->getRealPath() . " - $reason");
             }
         } else {
             if (!unlink($item->getRealPath())) {
-                throw new RuntimeException("Failed to remove file: " . $item->getRealPath());
+                $error = error_get_last();
+                $reason = $error['message'] ?? 'unknown error';
+                throw new RuntimeException("Failed to remove file: " . $item->getRealPath() . " - $reason");
             }
         }
     }
 
     if (!rmdir($path)) {
-        throw new RuntimeException("Failed to remove directory: $path");
+        $error = error_get_last();
+        $reason = $error['message'] ?? 'unknown error';
+        throw new RuntimeException("Failed to remove directory: $path - $reason");
     }
 }
 

@@ -9,6 +9,11 @@ clean_path_segment() {
         exit 1
     fi
 
+    if [ -z "$1" ]; then
+        echo "ERROR: clean_path_segment argument must not be empty." >&2
+        exit 1
+    fi
+
     printf '%s' "$1" | sed 's|^/||;s|/$||'
 }
 
