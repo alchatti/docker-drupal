@@ -135,7 +135,7 @@ RUN set -eux; \
     install-runtimes.sh --mariadb
     
 
-WORKDIR /var/www/html
+WORKDIR /app
 
 USER www-data
 
