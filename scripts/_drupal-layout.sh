@@ -4,6 +4,11 @@
 # Not intended to be executed directly.
 
 clean_path_segment() {
+    if [ "$#" -ne 1 ]; then
+        echo "ERROR: clean_path_segment expects exactly one argument." >&2
+        exit 1
+    fi
+
     printf '%s' "$1" | sed 's|^/||;s|/$||'
 }
 
