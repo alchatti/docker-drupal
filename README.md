@@ -10,7 +10,7 @@ This repository supports a repeatable Drupal container workflow across local dev
 - Apache `mod_php` runtime variant.
 - Apache + PHP-FPM runtime variant supervised by `s6-overlay`.
 - Builder image with PHP, Composer, and Node.js.
-- Shared shell scripts for installing PHP extensions, runtime dependencies, Apache/PHP configuration, s6 service generation, health checks, and image verification.
+- Shared shell scripts for installing PHP extensions, runtime dependencies, Apache/PHP configuration, s6 service generation, Drupal layout helpers, health checks, and image verification.
 - GitHub Actions matrix builds for multiple PHP versions, OS versions, and image variants.
 - Optional local image testing before pushing.
 - Multi-platform builds for `linux/amd64` and `linux/arm64`.
@@ -36,16 +36,17 @@ This repository supports a repeatable Drupal container workflow across local dev
 ├── serversideup-apache-fpm/
 │   └── Dockerfile
 ├── scripts/
+│   ├── _drupal-layout.sh
 │   ├── configure-drupal-runtime.sh
 │   ├── docker-entrypoint-apache.sh
 │   ├── generate-s6-services.sh
 │   ├── healthcheck.sh
-│   ├── install-builder-dependencies.sh
 │   ├── install-php-dependencies.sh
 │   ├── install-runtimes.sh
 │   ├── verify-apache-php.sh
 │   └── verify-builder.sh
 ├── app/
+├── cron/
 ├── example/
 └── README.md
 ```
@@ -229,8 +230,12 @@ This allows runtime overrides without rebuilding the image.
 
 | Variable | Default | Description |
 |---|---:|---|
-| `APP_ROOT` | `/var/www/html` | Drupal application root |
-| `DOC_ROOT` | `/var/www/html/web` | Apache document root |
+| `APP_ROOT` | `/app` | Drupal application root |
+| `DOC_ROOT` | *(empty — resolved to `APP_ROOT/DRUPAL_PUBLIC_DIR` at runtime)* | Apache document root |
+| `DRUPAL_PUBLIC_DIR` | `web` | Drupal web subdirectory (`web` or `docroot`) |
+| `PUBLIC_ROOT` | `/var/www/html` | Apache `DocumentRoot` symlink target |
+| `CONFIG_ROOT` | `/_config` | Runtime configuration directory |
+| `APACHE_CONFIG_DIR` | `/_config/apache` | Apache config include directory |
 | `FILES_DIR` | `/mnt/files` | External files mount path |
 | `DRUPAL_SUBDIR` | empty | Optional Apache alias path |
 | `APACHE_PORT` | `8080` | Apache listen port |
@@ -384,6 +389,39 @@ services:
 volumes:
   drupal-files:
 ```
+
+## Cron
+
+The `cron/` directory contains helper scripts for running Drush cron as a one-off container command.
+
+Docker Compose example:
+
+```yaml
+services:
+  web:
+    image: alchatti/drupal:apache-fpm
+    volumes:
+      - files:/mnt/files
+
+  cron:
+    image: alchatti/drupal:apache-fpm
+    profiles:
+      - cron
+    volumes:
+      - files:/mnt/files
+    command: drush --root=/app/web cron
+
+volumes:
+  files:
+```
+
+Manual run:
+
+```bash
+docker compose run --rm cron
+```
+
+For Kubernetes, use a `CronJob` resource. If the Drupal files volume is also mounted by web pods, ensure the storage class supports your access pattern (RWX for multi-pod scenarios).
 
 ## Healthcheck
 
@@ -620,13 +658,15 @@ www-data
 The image prepares writable paths for:
 
 ```text
-/var/www/html
+/app
+/var/www
 /_config
 /mnt/files
 /var/run/apache2
 /var/lock/apache2
 /var/log/apache2
 /var/run/php
+/etc/apache2
 ```
 
 The builder image also defaults to `www-data` and prepares writable Composer/npm cache locations.
