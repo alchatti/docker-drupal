@@ -94,6 +94,9 @@ RUN set -eux; \
     # Runtime Dependency
     install-runtimes.sh --mariadb
 
+RUN mkdir -p /_config/drupal
+COPY --chown=www-data:www-data --chmod=644 settings.docker.php /_config/drupal/settings.docker.php
+
 WORKDIR /app
 
 USER www-data
