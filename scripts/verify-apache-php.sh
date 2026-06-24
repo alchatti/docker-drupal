@@ -7,10 +7,17 @@ APP_ROOT="${APP_ROOT:-/app}"
 PUBLIC_ROOT="${PUBLIC_ROOT:-/var/www/html}"
 DRUPAL_PUBLIC_DIR="${DRUPAL_PUBLIC_DIR:-web}"
 DOC_ROOT="${DOC_ROOT:-}"
-
 DRUPAL_SUBDIR="${DRUPAL_SUBDIR:-}"
+
+FILES_DIR="${FILES_DIR:-/mnt/files}"
+DRUPAL_LINK_PUBLIC_FILES="${DRUPAL_LINK_PUBLIC_FILES:-1}"
+DRUPAL_PUBLIC_FILES_PATH="${DRUPAL_PUBLIC_FILES_PATH:-files}"
+DRUPAL_PUBLIC_FILES_SOURCE="${DRUPAL_PUBLIC_FILES_SOURCE:-${FILES_DIR}/public}"
+
 TEST_FILE="${TEST_FILE:-__apache_php_verify.php}"
+TEST_PUBLIC_FILE="${TEST_PUBLIC_FILE:-__public_files_verify.txt}"
 EXPECTED_MESSAGE="${EXPECTED_MESSAGE:-Hello, Drupal Developer!}"
+EXPECTED_PUBLIC_FILE_MESSAGE="${EXPECTED_PUBLIC_FILE_MESSAGE:-Hello from Drupal public files!}"
 CLEANUP_TEST_FILE="${CLEANUP_TEST_FILE:-1}"
 
 PHP_UPLOAD_MAX_FILESIZE="${PHP_UPLOAD_MAX_FILESIZE:-64M}"
@@ -23,6 +30,7 @@ CURL_RETRY_DELAY="${CURL_RETRY_DELAY:-2}"
 
 VERIFY_BOOTSTRAP_DOCROOT="${VERIFY_BOOTSTRAP_DOCROOT:-1}"
 VERIFY_REPAIR_PUBLIC_MOUNT="${VERIFY_REPAIR_PUBLIC_MOUNT:-1}"
+VERIFY_PUBLIC_FILES="${VERIFY_PUBLIC_FILES:-1}"
 
 # Optional:
 #   EXPECTED_PHP_SAPI=apache2handler
@@ -100,15 +108,39 @@ resolve_url() {
     export URL PUBLIC_TEST_PATH
 }
 
+resolve_public_file_url() {
+    local clean_subdir="$1"
+    local public_files_path
+
+    public_files_path="$(clean_path_segment "${DRUPAL_PUBLIC_FILES_PATH}")"
+
+    if [ -n "${clean_subdir}" ]; then
+        PUBLIC_FILE_URL="http://127.0.0.1:${APACHE_PORT}/${clean_subdir}/${public_files_path}/${TEST_PUBLIC_FILE}"
+    else
+        PUBLIC_FILE_URL="http://127.0.0.1:${APACHE_PORT}/${public_files_path}/${TEST_PUBLIC_FILE}"
+    fi
+
+    PUBLIC_FILE_PATH="${DRUPAL_PUBLIC_FILES_SOURCE}/${TEST_PUBLIC_FILE}"
+
+    export PUBLIC_FILE_URL PUBLIC_FILE_PATH
+}
+
 resolve_doc_root
 
 CLEAN_SUBDIR="$(clean_path_segment "${DRUPAL_SUBDIR}")"
 
 bootstrap_doc_root
+prepare_files_dir
+prepare_public_files
 prepare_public_mount "${CLEAN_SUBDIR}"
 resolve_url "${CLEAN_SUBDIR}"
+resolve_public_file_url "${CLEAN_SUBDIR}"
 
 TEST_FILE_PATH="${DOC_ROOT}/${TEST_FILE}"
+
+if [ "${VERIFY_PUBLIC_FILES}" = "1" ]; then
+    printf '%s\n' "${EXPECTED_PUBLIC_FILE_MESSAGE}" > "${PUBLIC_FILE_PATH}"
+fi
 
 echo "Verifying Apache and PHP..."
 echo "Runtime mode: ${DRUPAL_RUNTIME_MODE:-unknown}"
@@ -116,10 +148,17 @@ echo "App root: ${APP_ROOT}"
 echo "Drupal public dir: ${DRUPAL_PUBLIC_DIR}"
 echo "Resolved document root: ${DOC_ROOT}"
 echo "Apache public root: ${PUBLIC_ROOT}"
-echo "Drupal subdir: ${CLEAN_SUBDIR:-<root>}"
+echo "Drupal subdir: ${CLEAN_SUBDIR:-}"
+echo "Files dir: ${FILES_DIR}"
+echo "Public files path: ${DRUPAL_PUBLIC_FILES_PATH}"
+echo "Public files source: ${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "Test file path: ${TEST_FILE_PATH}"
 echo "Public test path: ${PUBLIC_TEST_PATH}"
 echo "URL: ${URL}"
+if [ "${VERIFY_PUBLIC_FILES}" = "1" ]; then
+    echo "Public file path: ${PUBLIC_FILE_PATH}"
+    echo "Public file URL: ${PUBLIC_FILE_URL}"
+fi
 echo "Expected response: ${EXPECTED_MESSAGE}"
 
 expected_message_json="$(php -r 'echo json_encode($argv[1]);' "${EXPECTED_MESSAGE}")"
@@ -154,6 +193,10 @@ PHP
 cleanup() {
     if [ "${CLEANUP_TEST_FILE}" = "1" ]; then
         rm -f "${TEST_FILE_PATH}" || true
+
+        if [ "${VERIFY_PUBLIC_FILES}" = "1" ]; then
+            rm -f "${PUBLIC_FILE_PATH}" || true
+        fi
     fi
 }
 trap cleanup EXIT
@@ -259,6 +302,17 @@ if [ "${timezone}" != "${TZ}" ]; then
     exit 1
 fi
 
+if [ "${VERIFY_PUBLIC_FILES}" = "1" ]; then
+    public_file_response="$(curl -fsS "${PUBLIC_FILE_URL}" | tr -d '\r')"
+
+    if [ "${public_file_response}" != "${EXPECTED_PUBLIC_FILE_MESSAGE}" ]; then
+        echo "ERROR: Public files response mismatch." >&2
+        echo "Expected: ${EXPECTED_PUBLIC_FILE_MESSAGE}" >&2
+        echo "Actual:   ${public_file_response}" >&2
+        exit 1
+    fi
+fi
+
 echo
 echo "Apache and PHP verification passed."
 echo "PHP SAPI: ${sapi}"
@@ -269,8 +323,15 @@ echo "APP_ROOT: ${APP_ROOT}"
 echo "DRUPAL_PUBLIC_DIR: ${DRUPAL_PUBLIC_DIR}"
 echo "DOC_ROOT: ${DOC_ROOT}"
 echo "PUBLIC_ROOT: ${PUBLIC_ROOT}"
-echo "DRUPAL_SUBDIR: ${CLEAN_SUBDIR:-<root>}"
+echo "DRUPAL_SUBDIR: ${CLEAN_SUBDIR:-}"
+echo "FILES_DIR: ${FILES_DIR}"
+echo "DRUPAL_PUBLIC_FILES_PATH: ${DRUPAL_PUBLIC_FILES_PATH}"
+echo "DRUPAL_PUBLIC_FILES_SOURCE: ${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "URL: ${URL}"
+
+if [ "${VERIFY_PUBLIC_FILES}" = "1" ]; then
+    echo "PUBLIC_FILE_URL: ${PUBLIC_FILE_URL}"
+fi
 
 echo
 echo "Request values:"

@@ -13,6 +13,20 @@ set -euo pipefail
 #   PUBLIC_ROOT: Apache public root, default /var/www/html
 #   DRUPAL_SUBDIR: optional URL subdirectory, e.g. test-site or /test-site
 #
+# Public files:
+#   FILES_DIR=/mnt/files
+#   DRUPAL_PUBLIC_FILES_PATH=files
+#   DRUPAL_PUBLIC_FILES_SOURCE=/mnt/files/public
+#   DRUPAL_LINK_PUBLIC_FILES=1
+#
+# Expected Drupal runtime setting:
+#   $settings['file_public_path'] = getenv('DRUPAL_PUBLIC_FILES_PATH') ?: 'files';
+#
+# Result:
+#   /app/web/files -> /mnt/files/public
+#   or
+#   /app/docroot/files -> /mnt/files/public
+#
 # Missing app fallback:
 #   APP_MISSING_PLACEHOLDER=1
 #   APP_MISSING_HTTP_STATUS=503
@@ -28,6 +42,9 @@ set -euo pipefail
 #
 #   DRUPAL_SUBDIR=test-site:
 #     /var/www/html/test-site -> /app/web or /app/docroot
+#
+#   Public files with subdir:
+#     /test-site/files/... -> /mnt/files/public/...
 
 : "${DRUPAL_RUNTIME_MODE:=s6-fpm}"
 
@@ -63,6 +80,11 @@ fi
 : "${DRUPAL_PUBLIC_DIR:=web}"
 : "${DOC_ROOT:=}"
 : "${DRUPAL_SUBDIR:=}"
+
+: "${FILES_DIR:=/mnt/files}"
+: "${DRUPAL_LINK_PUBLIC_FILES:=1}"
+: "${DRUPAL_PUBLIC_FILES_PATH:=files}"
+: "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
 
 : "${APP_MISSING_PLACEHOLDER:=1}"
 : "${APP_MISSING_HTTP_STATUS:=503}"
@@ -146,7 +168,9 @@ prepare_public_root() {
         mkdir -p "${DOC_ROOT}"
     fi
 
+    prepare_files_dir
     create_missing_app_index
+    prepare_public_files
 
     mkdir -p "$(dirname "${PUBLIC_ROOT}")"
 
@@ -181,6 +205,12 @@ prepare_public_root() {
 
     cat > "${APACHE_RUNTIME_CONF}" <<EOF_RUNTIME
 <Directory ${DOC_ROOT}>
+    Options FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
+
+<Directory ${DRUPAL_PUBLIC_FILES_SOURCE}>
     Options FollowSymLinks
     AllowOverride All
     Require all granted
@@ -373,7 +403,10 @@ echo "[system-init] APP_ROOT=${APP_ROOT}"
 echo "[system-init] DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}"
 echo "[system-init] DOC_ROOT=${DOC_ROOT}"
 echo "[system-init] PUBLIC_ROOT=${PUBLIC_ROOT}"
-echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-<root>}"
+echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-}"
+echo "[system-init] FILES_DIR=${FILES_DIR}"
+echo "[system-init] DRUPAL_PUBLIC_FILES_PATH=${DRUPAL_PUBLIC_FILES_PATH}"
+echo "[system-init] DRUPAL_PUBLIC_FILES_SOURCE=${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "[system-init] Handing control over to: $*"
 
 exec "$@"
