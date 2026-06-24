@@ -16,8 +16,8 @@ ARG VERSION
 LABEL org.opencontainers.image.title="PHP Builder" \
       org.opencontainers.image.description="Builder Image with PHP $PHP, Composer and NodeJS $NODE_VERSION on $OS" \
       org.opencontainers.image.authors="Majed Al-Chatti" \
-      org.opencontainers.image.source="https://github.com/alchatti/docker-php" \
-      org.opencontainers.image.documentation="https://github.com/alchatti/docker-php/build" \
+      org.opencontainers.image.source="https://github.com/alchatti/docker-drupal" \
+      org.opencontainers.image.documentation="https://github.com/alchatti/docker-drupal" \
       org.opencontainers.image.base.name="alchatti/php-builder" \
       org.opencontainers.image.ref.name="alchatti/php-builder:c2-p$PHP-n$NODE_VERSION-$OS" \
       org.opencontainers.image.created=$CREATE_DATE \

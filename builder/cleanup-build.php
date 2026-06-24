@@ -42,6 +42,43 @@ function isProtected(string $relative, array $protectedPaths): bool
     return false;
 }
 
+/**
+ * Recursively remove a directory and all its contents using native PHP.
+ */
+function removeDir(string $path): void
+{
+    try {
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+    } catch (UnexpectedValueException $e) {
+        throw new RuntimeException("Failed to open directory for removal (may not exist or lack permissions): $path - " . $e->getMessage(), 0, $e);
+    }
+
+    foreach ($items as $item) {
+        if ($item->isDir()) {
+            if (!rmdir($item->getRealPath())) {
+                $error = error_get_last();
+                $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
+                throw new RuntimeException("Failed to remove directory: " . $item->getRealPath() . " - $reason");
+            }
+        } else {
+            if (!unlink($item->getRealPath())) {
+                $error = error_get_last();
+                $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
+                throw new RuntimeException("Failed to remove file: " . $item->getRealPath() . " - $reason");
+            }
+        }
+    }
+
+    if (!rmdir($path)) {
+        $error = error_get_last();
+        $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
+        throw new RuntimeException("Failed to remove directory: $path - $reason");
+    }
+}
+
 $directory = new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS);
 $iterator  = new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::CHILD_FIRST);
 
@@ -58,7 +95,7 @@ foreach ($iterator as $path => $info) {
         if ($info->isDir() && fnmatch($dir, $info->getFilename())) {
             echo ($dryRun ? "[dry-run] Would remove dir: $relative\n"
                           : "Removing dir: $relative\n");
-            if (!$dryRun) exec("rm -rf \"$path\"");
+            if (!$dryRun) removeDir($path);
             continue 2;
         }
     }

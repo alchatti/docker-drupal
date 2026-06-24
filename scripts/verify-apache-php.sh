@@ -29,49 +29,8 @@ VERIFY_REPAIR_PUBLIC_MOUNT="${VERIFY_REPAIR_PUBLIC_MOUNT:-1}"
 #   EXPECTED_PHP_SAPI=fpm-fcgi
 EXPECTED_PHP_SAPI="${EXPECTED_PHP_SAPI:-}"
 
-clean_path_segment() {
-    printf '%s' "$1" | sed 's|^/||;s|/$||'
-}
-
-resolve_doc_root() {
-    local public_dir
-
-    public_dir="$(clean_path_segment "${DRUPAL_PUBLIC_DIR:-web}")"
-
-    case "${public_dir}" in
-        web|docroot)
-            ;;
-        *)
-            echo "ERROR: Invalid DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
-            echo "Allowed values: web, docroot" >&2
-            exit 1
-            ;;
-    esac
-
-    if [ -z "${DOC_ROOT}" ]; then
-        DOC_ROOT="${APP_ROOT}/${public_dir}"
-    fi
-
-    if [[ "${DOC_ROOT}" != /* ]]; then
-        echo "ERROR: DOC_ROOT must be an absolute path. Current value: ${DOC_ROOT}" >&2
-        exit 1
-    fi
-
-    export DOC_ROOT
-}
-
-safe_rm_rf() {
-    local target="$1"
-
-    case "${target}" in
-        ""|"/"|"/app"|"/app/"|"${APP_ROOT}"|"${APP_ROOT}/"|"${DOC_ROOT}"|"${DOC_ROOT}/")
-            echo "ERROR: Refusing to remove unsafe path: ${target}" >&2
-            exit 1
-            ;;
-    esac
-
-    rm -rf "${target}"
-}
+# shellcheck source=_drupal-layout.sh
+. /usr/local/bin/_drupal-layout.sh
 
 bootstrap_doc_root() {
     if [ -d "${DOC_ROOT}" ]; then
