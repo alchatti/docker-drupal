@@ -1,5 +1,5 @@
-# Read drush.cron and then excute one by one
 #!/usr/bin/env bash
+# Read drush.cron and then execute one by one
 set -u
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

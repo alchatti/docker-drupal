@@ -17,13 +17,15 @@ LABEL org.opencontainers.image.title="Drupal Apache mod_php runtime" \
 
 ENV DRUPAL_RUNTIME_MODE=mod_php \
   DRUPAL_SUBDIR= \
+  DRUPAL_PUBLIC_DIR=web \
   APACHE_PORT=8080 \
-  APP_ROOT=/var/www/html \
-  DOC_ROOT=/var/www/html/web \
+  APP_ROOT=/app \
+  DOC_ROOT= \
+  PUBLIC_ROOT=/var/www/html \
   CONFIG_ROOT=/_config \
   APACHE_CONFIG_DIR=/_config/apache \
   FILES_DIR=/mnt/files \
-  PATH=/var/www/html/vendor/bin:${PATH} \
+  PATH=/app/vendor/bin:${PATH} \
   APACHE_RUN_USER=www-data \
   APACHE_RUN_GROUP=www-data \
   APACHE_CONFDIR=/etc/apache2 \
@@ -82,6 +84,7 @@ RUN set -eux; \
   configure-drupal-runtime.sh; \
   chown -R www-data:www-data \
     "${APP_ROOT}" \
+    /var/www \
     "${CONFIG_ROOT}" \
     "${FILES_DIR}" \
     /var/run/apache2 \
@@ -91,7 +94,7 @@ RUN set -eux; \
     # Runtime Dependency
     install-runtimes.sh --mariadb
 
-WORKDIR /var/www/html
+WORKDIR /app
 
 USER www-data
 

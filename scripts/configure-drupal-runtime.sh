@@ -14,9 +14,12 @@ APACHE_DEFAULT_SITE="/etc/apache2/sites-available/000-default.conf"
 APACHE_MAIN_CONF="/etc/apache2/apache2.conf"
 APACHE_SECURITY_CONF="/etc/apache2/conf-available/security.conf"
 
+: "${APP_ROOT:=/app}"
+: "${PUBLIC_ROOT:=/var/www/html}"
+
 mkdir -p \
     "${APP_ROOT}" \
-    "${DOC_ROOT}" \
+    "${PUBLIC_ROOT}" \
     "${APACHE_CONFIG_DIR}" \
     "${PHP_CONF_DIR}" \
     "${FILES_DIR}/public" \
@@ -32,7 +35,8 @@ touch \
     "${APACHE_CONFIG_DIR}/apache-mpm.conf" \
     "${APACHE_CONFIG_DIR}/drupal-runtime.conf"
 
-a2enmod rewrite alias expires headers
+# DRUPAL_SUBDIR is handled by runtime symlinks.
+a2enmod rewrite expires headers
 
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
     a2dismod mpm_prefork || true
@@ -54,7 +58,7 @@ PHP_HANDLER=""
 if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
     PHP_HANDLER=$(cat <<EOF_HANDLER
 
-    <FilesMatch \\.php$>
+    <FilesMatch \.php$>
         SetHandler "proxy:unix:${FPM_SOCKET}|fcgi://localhost/"
     </FilesMatch>
 EOF_HANDLER
@@ -64,10 +68,10 @@ fi
 cat > "${APACHE_DEFAULT_SITE}" <<EOF_VHOST
 <VirtualHost *:${APACHE_PORT}>
     ServerName localhost
-    DocumentRoot ${DOC_ROOT}
+    DocumentRoot ${PUBLIC_ROOT}
     DirectoryIndex index.php index.html
 
-    <Directory ${DOC_ROOT}>
+    <Directory ${PUBLIC_ROOT}>
         Options FollowSymLinks
         AllowOverride All
         Require all granted
@@ -131,6 +135,7 @@ fi
 
 chown -R "${APACHE_RUN_USER}:${APACHE_RUN_GROUP}" \
     "${APP_ROOT}" \
+    /var/www \
     "${CONFIG_ROOT}" \
     "${FILES_DIR}" \
     /var/run/apache2 \
