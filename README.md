@@ -223,14 +223,36 @@ opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}
 
 This allows runtime overrides without rebuilding the image.
 
+### Drupal runtime settings file
+
+The runtime images ship a Drupal settings include at:
+
+```text
+/_config/drupal/settings.docker.php
+```
+
+Add the following to your Drupal site's `settings.php`:
+
+```php
+// Container runtime settings.
+$container_settings = '/_config/drupal/settings.docker.php';
+if (file_exists($container_settings)) {
+  include $container_settings;
+}
+```
+
+This file applies environment-driven Drupal runtime settings such as file paths, config sync, hash salt, trusted host patterns, reverse proxy settings, and site name overrides.
+
 ## Important environment variables
 
 ### Application paths
 
 | Variable | Default | Description |
 |---|---:|---|
-| `APP_ROOT` | `/var/www/html` | Drupal application root |
-| `DOC_ROOT` | `/var/www/html/web` | Apache document root |
+| `APP_ROOT` | `/app` | Drupal project root mounted inside the container |
+| `DRUPAL_PUBLIC_DIR` | `web` | Drupal public directory under `APP_ROOT` (`web` or `docroot`) |
+| `DOC_ROOT` | empty | Optional absolute override; otherwise resolves to `${APP_ROOT}/${DRUPAL_PUBLIC_DIR}` |
+| `PUBLIC_ROOT` | `/var/www/html` | Apache-served public path symlinked to the resolved Drupal docroot |
 | `FILES_DIR` | `/mnt/files` | External files mount path |
 | `DRUPAL_SUBDIR` | empty | Optional Apache alias path |
 | `APACHE_PORT` | `8080` | Apache listen port |
@@ -378,7 +400,7 @@ services:
   drupal:
     image: alchatti/drupal:apache-fpm
     volumes:
-      - ./web:/var/www/html
+      - ./:/app
       - drupal-files:/mnt/files
 
 volumes:
@@ -620,6 +642,7 @@ www-data
 The image prepares writable paths for:
 
 ```text
+/app
 /var/www/html
 /_config
 /mnt/files
