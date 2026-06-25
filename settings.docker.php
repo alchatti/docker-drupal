@@ -3,7 +3,7 @@
 /**
  * Runtime Drupal settings shipped with the container image.
  *
- * Add the following to your Drupal site's settings.php:
+ * Add the following to the end of your Drupal site's settings.php:
  *
  * @code
  * // Container runtime settings.
@@ -14,36 +14,166 @@
  * @endcode
  */
 
-$settings['file_public_path'] = getenv('DRUPAL_PUBLIC_FILES_PATH') ?: 'files';
+/**
+ * Return an environment variable or its default value.
+ *
+ * Empty environment values are treated as unset.
+ */
+$container_env = static function (
+    string $name,
+    string $default = '',
+): string {
+    $value = getenv($name);
 
-$settings['file_private_path'] = getenv('DRUPAL_PRIVATE_FILES_PATH') ?: '/mnt/files/private';
+    return $value === false || $value === ''
+        ? $default
+        : $value;
+};
 
-$settings['file_temp_path'] = getenv('DRUPAL_TMP_PATH') ?: '/mnt/files/tmp';
+/**
+ * Return an environment variable as a Boolean.
+ */
+$container_env_bool = static function (
+    string $name,
+    bool $default = false,
+): bool {
+    $value = getenv($name);
 
-$settings['config_sync_directory'] = getenv('DRUPAL_CONFIG_SYNC_DIR') ?: '/mnt/files/config/sync';
+    if ($value === false || $value === '') {
+        return $default;
+    }
 
-if (getenv('DRUPAL_HASH_SALT')) {
-    $settings['hash_salt'] = getenv('DRUPAL_HASH_SALT');
+    $parsed = filter_var(
+        $value,
+        FILTER_VALIDATE_BOOLEAN,
+        FILTER_NULL_ON_FAILURE,
+    );
+
+    return $parsed ?? $default;
+};
+
+/**
+ * Drupal file-system paths.
+ */
+$settings['file_public_path'] = $container_env(
+    'DRUPAL_PUBLIC_FILES_PATH',
+    'files',
+);
+
+$settings['file_private_path'] = $container_env(
+    'DRUPAL_PRIVATE_FILES_PATH',
+    '/mnt/files/private',
+);
+
+$settings['file_temp_path'] = $container_env(
+    'DRUPAL_TMP_PATH',
+    '/mnt/files/tmp',
+);
+
+$settings['config_sync_directory'] = $container_env(
+    'DRUPAL_CONFIG_SYNC_DIR',
+    '/mnt/files/config/sync',
+);
+
+/**
+ * Database connection.
+ */
+$database_driver = $container_env('DB_DRIVER', 'mysql');
+
+$database = [
+    'driver' => $database_driver,
+    'database' => $container_env('DB_NAME', 'drupal'),
+    'username' => $container_env('DB_USER', 'drupal'),
+    'password' => $container_env('DB_PASS', ''),
+    'host' => $container_env('DB_HOST', 'database'),
+    'port' => $container_env('DB_PORT', '3306'),
+    'prefix' => $container_env('DB_PREFIX', ''),
+];
+
+if ($database_driver === 'mysql') {
+    $database['collation'] = $container_env(
+        'DB_COLLATION',
+        'utf8mb4_general_ci',
+    );
 }
 
-if (getenv('DRUPAL_TRUSTED_HOST_PATTERN')) {
-    $settings['trusted_host_patterns'] = array_filter(array_map(
-        'trim',
-        explode(',', getenv('DRUPAL_TRUSTED_HOST_PATTERN'))
+$databases['default']['default'] = $database;
+
+/**
+ * Override the existing Drupal hash salt only when explicitly supplied.
+ */
+$hash_salt = getenv('DRUPAL_HASH_SALT');
+
+if ($hash_salt !== false && $hash_salt !== '') {
+    $settings['hash_salt'] = $hash_salt;
+}
+
+/**
+ * Trusted host patterns.
+ *
+ * Supply a semicolon-separated list of regular expressions:
+ *
+ * DRUPAL_TRUSTED_HOST_PATTERNS=^localhost$;^example\.com$;^.+\.example\.com$
+ */
+$trusted_host_patterns_value = getenv('DRUPAL_TRUSTED_HOST_PATTERNS');
+
+if (
+    $trusted_host_patterns_value !== false
+    && $trusted_host_patterns_value !== ''
+) {
+    $settings['trusted_host_patterns'] = array_values(array_filter(
+        array_map(
+            'trim',
+            explode(';', $trusted_host_patterns_value),
+        ),
+        static fn (string $value): bool => $value !== '',
     ));
 }
 
-if (getenv('DRUPAL_REVERSE_PROXY') === '1') {
-    $settings['reverse_proxy'] = true;
+/**
+ * Reverse-proxy configuration.
+ *
+ * Enable with:
+ *
+ * DRUPAL_REVERSE_PROXY=1
+ *
+ * Trusted proxy addresses:
+ * Supply a semicolon-separated list
+ *
+ * DRUPAL_TRUSTED_PROXIES=172.18.0.0/16;10.0.0.0/8
+ */
+if ($container_env_bool('DRUPAL_REVERSE_PROXY')) {
+    $trusted_proxies_value = getenv('DRUPAL_TRUSTED_PROXIES');
 
-    if (getenv('DRUPAL_REVERSE_PROXY_ADDRESSES')) {
-        $settings['reverse_proxy_addresses'] = array_filter(array_map(
-            'trim',
-            explode(',', getenv('DRUPAL_REVERSE_PROXY_ADDRESSES'))
+    $trusted_proxies = $trusted_proxies_value === false
+        ? []
+        : array_values(array_filter(
+            array_map(
+                'trim',
+                explode(';', $trusted_proxies_value),
+            ),
+            static fn (string $value): bool => $value !== '',
         ));
+
+    if ($trusted_proxies === []) {
+        throw new RuntimeException(
+            'DRUPAL_REVERSE_PROXY is enabled, but '
+            . 'DRUPAL_TRUSTED_PROXIES is empty.',
+        );
     }
+
+    $settings['reverse_proxy'] = true;
+    $settings['reverse_proxy_addresses'] = $trusted_proxies;
+
+    $settings['reverse_proxy_trusted_headers'] =
+        \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_TRAEFIK;
 }
 
-if (getenv('DRUPAL_SITE_NAME')) {
-    $config['system.site']['name'] = getenv('DRUPAL_SITE_NAME');
+/**
+ * Optional Drupal configuration overrides.
+ */
+$site_name = getenv('DRUPAL_SITE_NAME');
+
+if ($site_name !== false && $site_name !== '') {
+    $config['system.site']['name'] = $site_name;
 }
