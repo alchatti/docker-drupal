@@ -38,8 +38,6 @@ This repository supports a repeatable Drupal container workflow across local dev
 ├── vmaker/
 │   ├── Dockerfile
 │   └── files-vmaker.sh
-├── serversideup-apache-fpm/
-│   └── Dockerfile
 ├── scripts/
 │   ├── _drupal-layout.sh
 │   ├── configure-drupal-runtime.sh
@@ -137,12 +135,6 @@ Services are generated under:
 ```
 
 This means the image uses the s6-overlay v3 `s6-rc` service layout, not the legacy `/etc/services.d` layout.
-
-### `serversideup-apache-fpm`
-
-Alternative runtime image based on `serversideup/php:<version>-fpm-apache-<os>`.
-
-This variant is useful when you want to compare or use the ServersideUp PHP base image while still applying this repository’s Drupal runtime dependency and verification approach.
 
 ### `vmaker`
 
@@ -586,7 +578,6 @@ blueprints: |
       "build_args": ["NODE=24"],
       "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
     },
-    "serversideup-apache-fpm": {},
     "apache": {
       "test_command": "..."
     },
