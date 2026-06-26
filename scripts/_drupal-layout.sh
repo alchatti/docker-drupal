@@ -2,6 +2,19 @@
 # Shared Drupal layout helpers.
 # Sourced by docker-entrypoint-apache.sh and verify-apache-php.sh.
 # Not intended to be executed directly.
+#
+# Opinionated layout:
+#   APP_ROOT=/app
+#   DOC_ROOT=/app/web
+#   PUBLIC_ROOT=/var/www/html
+#
+# Public files symlink policy:
+#   The application image must contain:
+#     /app/web/files -> /mnt/files/public
+#
+# The runtime entrypoint does not migrate or create application public files.
+# Volume initialization, seeding, backup, and restore are handled by the
+# facilitator image.
 
 clean_path_segment() {
     if [ "$#" -ne 1 ]; then
@@ -69,141 +82,31 @@ safe_rm_rf() {
         esac
     fi
 
-    if [ -n "${FILES_DIR:-}" ]; then
-        case "${target}" in
-            "${FILES_DIR}"|"${FILES_DIR}/")
-                echo "ERROR: Refusing to remove FILES_DIR: ${target}" >&2
-                exit 1
-                ;;
-        esac
-    fi
-
-    if [ -n "${DRUPAL_PUBLIC_FILES_SOURCE:-}" ]; then
-        case "${target}" in
-            "${DRUPAL_PUBLIC_FILES_SOURCE}"|"${DRUPAL_PUBLIC_FILES_SOURCE}/")
-                echo "ERROR: Refusing to remove DRUPAL_PUBLIC_FILES_SOURCE: ${target}" >&2
-                exit 1
-                ;;
-        esac
-    fi
-
     rm -rf "${target}"
 }
 
-is_dir_empty() {
-    if [ "$#" -ne 1 ]; then
-        echo "ERROR: is_dir_empty expects exactly one directory argument." >&2
-        exit 1
-    fi
-
-    local dir="$1"
-
-    [ -z "$(find "${dir}" -mindepth 1 -maxdepth 1 -print -quit)" ]
-}
-
-move_dir_contents_safely() {
-    if [ "$#" -ne 2 ]; then
-        echo "ERROR: move_dir_contents_safely expects source and target directories." >&2
-        exit 1
-    fi
-
-    local from_dir="$1"
-    local to_dir="$2"
-    local item
-    local base
-    local entries=()
-
-    if [ ! -d "${from_dir}" ]; then
-        echo "ERROR: Source directory does not exist: ${from_dir}" >&2
-        exit 1
-    fi
-
-    mkdir -p "${to_dir}"
-
-    shopt -s dotglob nullglob
-    entries=("${from_dir}"/*)
-
-    if [ "${#entries[@]}" -eq 0 ]; then
-        shopt -u dotglob nullglob
-        return
-    fi
-
-    for item in "${entries[@]}"; do
-        base="$(basename "${item}")"
-
-        if [ -e "${to_dir}/${base}" ] || [ -L "${to_dir}/${base}" ]; then
-            echo "ERROR: Cannot migrate public files because target already exists: ${to_dir}/${base}" >&2
-            echo "Source was left untouched: ${from_dir}" >&2
-            echo "Resolve the conflict manually, then restart the container." >&2
-            shopt -u dotglob nullglob
-            exit 1
-        fi
-    done
-
-    for item in "${entries[@]}"; do
-        mv "${item}" "${to_dir}/"
-    done
-
-    shopt -u dotglob nullglob
-}
-
 resolve_doc_root() {
-    local public_dir
+    : "${APP_ROOT:=/app}"
+    : "${PUBLIC_ROOT:=/var/www/html}"
 
-    public_dir="$(clean_path_segment "${DRUPAL_PUBLIC_DIR:-web}")"
+    require_absolute_path "APP_ROOT" "${APP_ROOT}"
+    require_absolute_path "PUBLIC_ROOT" "${PUBLIC_ROOT}"
 
-    case "${public_dir}" in
-        web|docroot)
-            ;;
-        *)
-            echo "ERROR: Invalid DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
-            echo "Allowed values: web, docroot" >&2
-            exit 1
-            ;;
-    esac
-
-    require_absolute_path "APP_ROOT" "${APP_ROOT:-}"
-
-    if [ -z "${DOC_ROOT:-}" ]; then
-        DOC_ROOT="${APP_ROOT}/${public_dir}"
-    fi
+    DOC_ROOT="${APP_ROOT}/web"
 
     require_absolute_path "DOC_ROOT" "${DOC_ROOT}"
-    require_absolute_path "PUBLIC_ROOT" "${PUBLIC_ROOT:-}"
 
     export DOC_ROOT
 }
 
-prepare_files_dir() {
+validate_app_files_symlink() {
     : "${FILES_DIR:=/mnt/files}"
-    : "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
-
-    require_absolute_path "FILES_DIR" "${FILES_DIR}"
-    require_absolute_path "DRUPAL_PUBLIC_FILES_SOURCE" "${DRUPAL_PUBLIC_FILES_SOURCE}"
-
-    mkdir -p \
-        "${FILES_DIR}/public" \
-        "${FILES_DIR}/private" \
-        "${FILES_DIR}/tmp" \
-        "${FILES_DIR}/config/sync"
-
-    echo "[system-init] Files directory prepared: ${FILES_DIR}"
-}
-
-prepare_public_files() {
-    : "${DRUPAL_LINK_PUBLIC_FILES:=1}"
     : "${DRUPAL_PUBLIC_FILES_PATH:=files}"
-    : "${FILES_DIR:=/mnt/files}"
     : "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
 
     local public_files_path
     local public_files_mount
     local current_target
-
-    if [ "${DRUPAL_LINK_PUBLIC_FILES}" != "1" ]; then
-        echo "[system-init] Public files symlink disabled."
-        return
-    fi
 
     require_absolute_path "DOC_ROOT" "${DOC_ROOT:-}"
     require_absolute_path "DRUPAL_PUBLIC_FILES_SOURCE" "${DRUPAL_PUBLIC_FILES_SOURCE}"
@@ -223,51 +126,22 @@ prepare_public_files() {
             ;;
     esac
 
-    mkdir -p "${DRUPAL_PUBLIC_FILES_SOURCE}"
-
     public_files_mount="${DOC_ROOT}/${public_files_path}"
 
-    if [ -L "${public_files_mount}" ]; then
-        current_target="$(readlink "${public_files_mount}")"
-
-        if [ "${current_target}" = "${DRUPAL_PUBLIC_FILES_SOURCE}" ]; then
-            echo "[system-init] Public files symlink already exists: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}"
-            return
-        fi
-
-        echo "[system-init] Repairing public files symlink: ${public_files_mount} currently points to ${current_target}"
-        rm -f "${public_files_mount}"
-        ln -sfn "${DRUPAL_PUBLIC_FILES_SOURCE}" "${public_files_mount}"
-        echo "[system-init] Public files symlink repaired: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}"
-        return
-    fi
-
-    if [ -d "${public_files_mount}" ]; then
-        if is_dir_empty "${public_files_mount}"; then
-            echo "[system-init] Existing public files folder is empty. Replacing with symlink: ${public_files_mount}"
-            rmdir "${public_files_mount}"
-        else
-            echo "[system-init] Existing public files folder contains files: ${public_files_mount}"
-            echo "[system-init] Migrating contents to: ${DRUPAL_PUBLIC_FILES_SOURCE}"
-
-            move_dir_contents_safely "${public_files_mount}" "${DRUPAL_PUBLIC_FILES_SOURCE}"
-
-            rmdir "${public_files_mount}"
-
-            echo "[system-init] Public files migration completed."
-        fi
-
-        ln -sfn "${DRUPAL_PUBLIC_FILES_SOURCE}" "${public_files_mount}"
-        echo "[system-init] Public files symlink created: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}"
-        return
-    fi
-
-    if [ -e "${public_files_mount}" ]; then
-        echo "ERROR: Public files path exists but is not a directory or symlink: ${public_files_mount}" >&2
-        echo "Remove it manually or change DRUPAL_PUBLIC_FILES_PATH." >&2
+    if [ ! -L "${public_files_mount}" ]; then
+        echo "ERROR: Public files path must be a symlink created at app build time." >&2
+        echo "Expected: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}" >&2
         exit 1
     fi
 
-    ln -sfn "${DRUPAL_PUBLIC_FILES_SOURCE}" "${public_files_mount}"
-    echo "[system-init] Public files symlink created: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}"
+    current_target="$(readlink "${public_files_mount}")"
+
+    if [ "${current_target}" != "${DRUPAL_PUBLIC_FILES_SOURCE}" ]; then
+        echo "ERROR: Public files symlink points to the wrong target." >&2
+        echo "Expected: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}" >&2
+        echo "Actual:   ${public_files_mount} -> ${current_target}" >&2
+        exit 1
+    fi
+
+    echo "[system-init] Public files symlink verified: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}"
 }
