@@ -1,12 +1,10 @@
 # Drupal Files Facilitator
 
-The facilitator image initializes and manages the Drupal files volume mounted at `/mnt/files`.
+The files facilitator is a small one-shot container used to initialize, seed, archive, or restore a Drupal `/mnt/files` named volume.
 
-It is intended to be run as a one-shot container before or alongside the Drupal app container.
+It runs as `www-data` and is designed for Docker named volumes, not bind mounts.
 
-## Folder structure
-
-The facilitator creates:
+## Directory layout
 
 ```text
 /mnt/files/public
@@ -15,51 +13,54 @@ The facilitator creates:
 /mnt/files/config/sync
 ```
 
-The Drupal application image should already contain:
+The Drupal application image should contain this symlink:
 
 ```text
 /app/web/files -> /mnt/files/public
 ```
 
-## Build a site-specific facilitator
+## Build the base facilitator image
+
+```bash
+docker build -f facilitator/Dockerfile -t alchatti/drupal:files-facilitator .
+```
+
+## App-specific facilitator image
 
 ```dockerfile
 FROM alchatti/drupal:files-facilitator
 
-COPY files/public/ /payload/public/
-COPY files/private/ /payload/private/
-COPY files/config/sync/ /payload/config/sync/
+COPY --chown=www-data:www-data files/public/ /payload/public/
+COPY --chown=www-data:www-data files/private/ /payload/private/
+COPY --chown=www-data:www-data files/config/sync/ /payload/config/sync/
 ```
 
-## Run examples
-
-Initialize only:
+## Actions
 
 ```bash
-docker run --rm -v drupal-files:/mnt/files my-files-facilitator init
-```
+docker run --rm -v drupal-files:/mnt/files alchatti/drupal:files-facilitator init
 
-Seed payload:
+docker run --rm -v drupal-files:/mnt/files my-site-files-facilitator seed
 
-```bash
-docker run --rm -v drupal-files:/mnt/files my-files-facilitator seed
-```
-
-Create archive:
-
-```bash
 docker run --rm \
   -v drupal-files:/mnt/files \
-  -v "$PWD/archive:/archive" \
-  my-files-facilitator archive
-```
+  -v drupal-archive:/archive \
+  alchatti/drupal:files-facilitator archive
 
-Restore archive:
-
-```bash
 docker run --rm \
   -v drupal-files:/mnt/files \
-  -v "$PWD/archive:/archive" \
+  -v drupal-archive:/archive \
   -e CLEAR_TARGET=1 \
-  my-files-facilitator restore /archive/drupal-files.tar.gz
+  alchatti/drupal:files-facilitator restore
+```
+
+## Environment variables
+
+```text
+FILES_DIR=/mnt/files
+PAYLOAD_DIR=/payload
+ARCHIVE_DIR=/archive
+FACILITATOR_ACTION=seed
+CLEAR_TARGET=0
+ARCHIVE_NAME=drupal-files.tar.gz
 ```
