@@ -46,15 +46,9 @@ run:
 
 ## 🔍 Run test | optional `make test SITE=example`
 test:
-	@echo "🔍 Running test script in $(IMAGE)..."
-	docker run -d --name $(CONTAINER_NAME)-test \
-	--memory=$(MEM)g \
-	-e DRUPAL_SUBDIR="$(SITE)" \
-	-p 8080:8080 \
-	"$(IMAGE)" \
-	&& sleep 5 \
-	&& docker exec $(CONTAINER_NAME)-test verify-apache-php.sh \
-	&& docker rm -f $(CONTAINER_NAME)-test
+	@echo "🔍 Running external test for $(IMAGE)..."
+	IMAGE="$(IMAGE)" DRUPAL_SUBDIR="$(SITE)" \
+	bash test/test-apache-php.sh "$(IMAGE)"
 
 ## ℹ️ Show available targets
 help:
