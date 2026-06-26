@@ -35,9 +35,9 @@ This repository supports a repeatable Drupal container workflow across local dev
 │   └── cleanup.json
 ├── cron/
 │   └── README.md
-├── facilitator/
+├── vmaker/
 │   ├── Dockerfile
-│   └── files-facilitator.sh
+│   └── files-vmaker.sh
 ├── serversideup-apache-fpm/
 │   └── Dockerfile
 ├── scripts/
@@ -144,14 +144,14 @@ Alternative runtime image based on `serversideup/php:<version>-fpm-apache-<os>`.
 
 This variant is useful when you want to compare or use the ServersideUp PHP base image while still applying this repository’s Drupal runtime dependency and verification approach.
 
-### `facilitator`
+### `vmaker`
 
 A utility image for Drupal files volume initialization, seeding, archive, and restore workflows.
 
 Reference:
 
 ```text
-facilitator/README.md
+vmaker/README.md
 ```
 
 ## Image tags
@@ -168,7 +168,7 @@ Examples:
 alchatti/drupal:8.4-apache-trixie
 alchatti/drupal:8.4-apache-fpm-trixie
 alchatti/drupal:8.4-builder-trixie
-alchatti/drupal:8.4-facilitator-trixie
+alchatti/drupal:8.4-vmaker-trixie
 ```
 
 For the latest PHP and OS values in the matrix, a shorter variant tag is also generated:
@@ -177,7 +177,7 @@ For the latest PHP and OS values in the matrix, a shorter variant tag is also ge
 alchatti/drupal:apache
 alchatti/drupal:apache-fpm
 alchatti/drupal:builder
-alchatti/drupal:facilitator
+alchatti/drupal:vmaker
 ```
 
 ### Branch tags
@@ -518,12 +518,12 @@ docker build \
   -f builder/Dockerfile .
 ```
 
-### Files facilitator
+### Files vmaker
 
 ```bash
 docker build \
-  -t alchatti/drupal:files-facilitator \
-  -f facilitator/Dockerfile .
+  -t alchatti/drupal:files-vmaker \
+  -f vmaker/Dockerfile .
 ```
 
 ## Run locally
@@ -581,7 +581,7 @@ php_versions: '["8.4"]'
 os_versions: '["trixie"]'
 blueprints: |
   {
-    "facilitator": {},
+    "vmaker": {},
     "builder": {
       "build_args": ["NODE=24"],
       "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"

@@ -1,6 +1,6 @@
 services:
   files-init:
-    image: my-drupal-files-facilitator
+    image: my-drupal-files-vmaker
     command: seed
     volumes:
       - drupal-files:/mnt/files

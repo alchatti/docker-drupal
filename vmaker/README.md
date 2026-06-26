@@ -1,6 +1,6 @@
-# Drupal Files Facilitator
+# Drupal Files vmaker
 
-The files facilitator is a small one-shot container used to initialize, seed, archive, or restore a Drupal `/mnt/files` named volume.
+The files vmaker is a small one-shot container used to initialize, seed, archive, or restore a Drupal `/mnt/files` named volume.
 
 It runs as `www-data` and is designed for Docker named volumes, not bind mounts.
 
@@ -19,16 +19,16 @@ The Drupal application image should contain this symlink:
 /app/web/files -> /mnt/files/public
 ```
 
-## Build the base facilitator image
+## Build the base vmaker image
 
 ```bash
-docker build -f facilitator/Dockerfile -t alchatti/drupal:files-facilitator .
+docker build -f vmaker/Dockerfile -t alchatti/drupal:files-vmaker .
 ```
 
-## App-specific facilitator image
+## App-specific vmaker image
 
 ```dockerfile
-FROM alchatti/drupal:files-facilitator
+FROM alchatti/drupal:files-vmaker
 
 COPY --chown=www-data:www-data files/public/ /payload/public/
 COPY --chown=www-data:www-data files/private/ /payload/private/
@@ -38,20 +38,20 @@ COPY --chown=www-data:www-data files/config/sync/ /payload/config/sync/
 ## Actions
 
 ```bash
-docker run --rm -v drupal-files:/mnt/files alchatti/drupal:files-facilitator init
+docker run --rm -v drupal-files:/mnt/files alchatti/drupal:files-vmaker init
 
-docker run --rm -v drupal-files:/mnt/files my-site-files-facilitator seed
+docker run --rm -v drupal-files:/mnt/files my-site-files-vmaker seed
 
 docker run --rm \
   -v drupal-files:/mnt/files \
   -v drupal-archive:/archive \
-  alchatti/drupal:files-facilitator archive
+  alchatti/drupal:files-vmaker archive
 
 docker run --rm \
   -v drupal-files:/mnt/files \
   -v drupal-archive:/archive \
   -e CLEAR_TARGET=1 \
-  alchatti/drupal:files-facilitator restore
+  alchatti/drupal:files-vmaker restore
 ```
 
 ## Environment variables
@@ -60,7 +60,7 @@ docker run --rm \
 FILES_DIR=/mnt/files
 PAYLOAD_DIR=/payload
 ARCHIVE_DIR=/archive
-FACILITATOR_ACTION=seed
+VMAKER_ACTION=seed
 CLEAR_TARGET=0
 ARCHIVE_NAME=drupal-files.tar.gz
 ```
