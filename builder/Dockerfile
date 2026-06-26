@@ -36,7 +36,7 @@ COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 COPY --chmod=755 scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
 COPY --chmod=755 scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 
-# Install Node.js, PHP extensions/dependencies, and prepare writable non-root paths
+# Install Node.js, latest npm, PHP extensions/dependencies, and prepare writable non-root paths
 RUN set -eux; \
     apt-get update; \
     apt-get upgrade -y; \
@@ -47,6 +47,8 @@ RUN set -eux; \
       xz-utils; \
     curl -fsSL "https://deb.nodesource.com/setup_${NODE}.x" | bash -; \
     apt-get install -y --no-install-recommends nodejs; \
+    npm install -g npm@latest; \
+    npm cache clean --force; \
     install-php-dependencies.sh; \
     mkdir -p \
       /app \
@@ -65,10 +67,11 @@ WORKDIR /app
 
 USER www-data
 
-# Post-installation system verification as root during build
+# Post-installation verification
 RUN set -eux; \
     composer --version; \
     node --version; \
-    npm --version
+    npm --version; \
+    npm config get cache
 
 CMD ["bash"]
