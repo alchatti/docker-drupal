@@ -13,7 +13,7 @@ SITE ?= example
 MEM ?= 2
 
 IMAGE_NAME ?= local/drupal-apache-fpm
-IMAGE_TAG ?= p$(PHP)-n$(NODE_VERSION)-$(OS)
+IMAGE_TAG ?= p$(PHP)-$(OS)
 CONTAINER_NAME ?= drupal-apache-fpm
 
 TIMESTAMP := $(shell date +'%Y%m%d')
@@ -29,7 +29,6 @@ build:
 		--build-arg OS=$(OS) \
 		--build-arg PHP=$(PHP) \
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
-		--build-arg RELEASE='MAKE' \
 		--no-cache \
 		-t $(IMAGE) ..
 
@@ -54,7 +53,7 @@ test:
 	-p 8080:8080 \
 	"$(IMAGE)" \
 	&& sleep 5 \
-	&& docker exec $(CONTAINER_NAME)-test verify-apache-fpm-php.sh \
+	&& docker exec $(CONTAINER_NAME)-test verify-apache-php.sh \
 	&& docker rm -f $(CONTAINER_NAME)-test
 
 ## ℹ️ Show available targets
