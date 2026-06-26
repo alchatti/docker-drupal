@@ -14,7 +14,9 @@
 #   COPY --chown=www-data:www-data files/private/ /payload/private/
 #   COPY --chown=www-data:www-data files/config/sync/ /payload/config/sync/
 
-FROM debian:bookworm-slim
+ARG OS=bookworm
+
+FROM debian:${OS}-slim
 
 LABEL org.opencontainers.image.title="Drupal Files Facilitator" \
   org.opencontainers.image.description="Initializes, seeds, archives, and restores a Drupal /mnt/files named volume" \
