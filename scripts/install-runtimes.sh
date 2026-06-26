@@ -153,17 +153,17 @@ if [ "${INSTALL_SQLITE}" = true ]; then
 fi
 
 if [ "${INSTALL_REDIS}" = true ]; then
-    pecl install redis-6.1.0
+    pecl install redis-6
     docker-php-ext-enable redis
 fi
 
 if [ "${INSTALL_MEMCACHED}" = true ]; then
-    pecl install memcached-3.2.0
+    pecl install memcached-3
     docker-php-ext-enable memcached
 fi
 
 if [ "${INSTALL_IMAGICK}" = true ]; then
-    pecl install imagick-3.7.0
+    pecl install imagick-3
     docker-php-ext-enable imagick
 fi
 
