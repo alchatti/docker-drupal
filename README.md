@@ -33,14 +33,19 @@ This repository supports a repeatable Drupal container workflow across local dev
 │   ├── Dockerfile
 │   ├── cleanup-build.php
 │   └── cleanup.json
+├── cron/
+│   └── README.md
+├── facilitator/
+│   ├── Dockerfile
+│   └── files-facilitator.sh
 ├── serversideup-apache-fpm/
 │   └── Dockerfile
 ├── scripts/
+│   ├── _drupal-layout.sh
 │   ├── configure-drupal-runtime.sh
 │   ├── docker-entrypoint-apache.sh
 │   ├── generate-s6-services.sh
 │   ├── healthcheck.sh
-│   ├── install-builder-dependencies.sh
 │   ├── install-php-dependencies.sh
 │   ├── install-runtimes.sh
 │   └── verify-builder.sh
@@ -139,6 +144,16 @@ Alternative runtime image based on `serversideup/php:<version>-fpm-apache-<os>`.
 
 This variant is useful when you want to compare or use the ServersideUp PHP base image while still applying this repository’s Drupal runtime dependency and verification approach.
 
+### `facilitator`
+
+A utility image for Drupal files volume initialization, seeding, archive, and restore workflows.
+
+Reference:
+
+```text
+facilitator/README.md
+```
+
 ## Image tags
 
 The GitHub Actions matrix generator builds image tags using:
@@ -153,6 +168,7 @@ Examples:
 alchatti/drupal:8.4-apache-trixie
 alchatti/drupal:8.4-apache-fpm-trixie
 alchatti/drupal:8.4-builder-trixie
+alchatti/drupal:8.4-facilitator-trixie
 ```
 
 For the latest PHP and OS values in the matrix, a shorter variant tag is also generated:
@@ -161,6 +177,7 @@ For the latest PHP and OS values in the matrix, a shorter variant tag is also ge
 alchatti/drupal:apache
 alchatti/drupal:apache-fpm
 alchatti/drupal:builder
+alchatti/drupal:facilitator
 ```
 
 ### Branch tags
@@ -503,6 +520,14 @@ docker build \
   -f builder/Dockerfile .
 ```
 
+### Files facilitator
+
+```bash
+docker build \
+  -t alchatti/drupal:files-facilitator \
+  -f facilitator/Dockerfile .
+```
+
 ## Run locally
 
 ### Apache mod_php
@@ -558,6 +583,7 @@ php_versions: '["8.4"]'
 os_versions: '["trixie"]'
 blueprints: |
   {
+    "facilitator": {},
     "builder": {
       "build_args": ["NODE=24"],
       "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
