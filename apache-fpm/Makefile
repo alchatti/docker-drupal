@@ -47,8 +47,8 @@ run:
 ## 🔍 Run test | optional `make test SITE=example`
 test:
 	@echo "🔍 Running external test for $(IMAGE)..."
-	IMAGE="$(IMAGE)" DRUPAL_SUBDIR="$(SITE)" \
-	bash test/test-apache-php.sh "$(IMAGE)"
+	DRUPAL_SUBDIR="$(SITE)" \
+	bash ../test/test-apache-php.sh "$(IMAGE)"
 
 ## ℹ️ Show available targets
 help:
