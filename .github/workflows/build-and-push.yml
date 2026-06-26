@@ -24,18 +24,17 @@ jobs:
       os_versions: '["trixie"]'
       blueprints: |
         {
-          "vmaker": {},
+          "apache-fpm": {
+            "test_command": "PHP_UPLOAD_MAX_FILESIZE=128M PHP_POST_MAX_SIZE=129M PHP_MAX_EXECUTION_TIME=180 EXPECTED_PHP_SAPI=fpm-fcgi ./test/test-apache-php.sh \"$IMAGE\""
+          },
+          "apache": {
+            "test_command": "PHP_UPLOAD_MAX_FILESIZE=128M PHP_POST_MAX_SIZE=129M PHP_MAX_EXECUTION_TIME=180 EXPECTED_PHP_SAPI=apache2handler ./test/test-apache-php.sh \"$IMAGE\""
+          },
           "builder": {
             "build_args": ["NODE=24"],
             "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
           },
-          "serversideup-apache-fpm": {},
-          "apache": {
-            "test_command": "PHP_UPLOAD_MAX_FILESIZE=128M PHP_POST_MAX_SIZE=129M PHP_MAX_EXECUTION_TIME=180 EXPECTED_PHP_SAPI=apache2handler ./test/test-apache-php.sh \"$IMAGE\""
-          },
-          "apache-fpm": {
-            "test_command": "PHP_UPLOAD_MAX_FILESIZE=128M PHP_POST_MAX_SIZE=129M PHP_MAX_EXECUTION_TIME=180 EXPECTED_PHP_SAPI=fpm-fcgi ./test/test-apache-php.sh \"$IMAGE\""
-          }
+          "vmaker": {}
         }
 
   build:
