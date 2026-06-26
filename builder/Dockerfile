@@ -1,7 +1,7 @@
 # Global Scope Arguments
 ARG PHP=8.1
 ARG OS=bookworm
-ARG NODE_VERSION=22
+ARG NODE=22
 ARG CREATE_DATE="NA"
 ARG VERSION=A-0
 
@@ -9,21 +9,21 @@ FROM php:${PHP}-${OS}
 
 ARG PHP
 ARG OS
-ARG NODE_VERSION
+ARG NODE
 ARG CREATE_DATE
 ARG VERSION
 
 LABEL org.opencontainers.image.title="PHP Builder" \
-      org.opencontainers.image.description="Builder Image with PHP $PHP, Composer and NodeJS $NODE_VERSION on $OS" \
+      org.opencontainers.image.description="Builder Image with PHP $PHP, Composer and NodeJS $NODE on $OS" \
       org.opencontainers.image.authors="Majed Al-Chatti" \
       org.opencontainers.image.source="https://github.com/alchatti/docker-drupal" \
       org.opencontainers.image.documentation="https://github.com/alchatti/docker-drupal" \
       org.opencontainers.image.base.name="alchatti/php-builder" \
-      org.opencontainers.image.ref.name="alchatti/php-builder:c2-p$PHP-n$NODE_VERSION-$OS" \
+      org.opencontainers.image.ref.name="alchatti/php-builder:c2-p$PHP-n$NODE-$OS" \
       org.opencontainers.image.created=$CREATE_DATE \
       org.opencontainers.image.version=$VERSION
 
-ENV NODE=${NODE_VERSION} \
+ENV NODE=${NODE} \
     HOME=/var/www \
     COMPOSER_HOME=/var/www/.composer \
     NPM_CONFIG_CACHE=/var/www/.npm \
