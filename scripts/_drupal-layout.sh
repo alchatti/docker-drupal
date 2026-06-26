@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared Drupal layout helpers.
-# Sourced by docker-entrypoint-apache.sh and verify-apache-php.sh.
+# Sourced by docker-entrypoint-apache.sh.
 # Not intended to be executed directly.
 #
 # Opinionated layout:

@@ -43,7 +43,6 @@ This repository supports a repeatable Drupal container workflow across local dev
 │   ├── install-builder-dependencies.sh
 │   ├── install-php-dependencies.sh
 │   ├── install-runtimes.sh
-│   ├── verify-apache-php.sh
 │   └── verify-builder.sh
 ├── app/
 ├── example/
@@ -448,34 +447,28 @@ docker run --rm alchatti/drupal:builder verify-builder.sh
 ### Apache/PHP verification
 
 ```bash
-verify-apache-php.sh
+./test/test-apache-php.sh <IMAGE>
 ```
 
-Validates:
+Validates from outside the container:
 
-- Apache can serve a generated PHP file
+- Apache can serve a PHP file volume-mounted before container start
 - PHP runtime values are applied
 - upload size overrides work
 - `post_max_size` override works
 - `max_execution_time` override works
-- memory values are printed for review
 
 Example:
 
 ```bash
-docker run -d \
-  --name apache-php-test \
-  -e DRUPAL_SUBDIR=/test-site \
-  -e PHP_UPLOAD_MAX_FILESIZE=128M \
-  -e PHP_POST_MAX_SIZE=129M \
-  -e PHP_MAX_EXECUTION_TIME=180 \
-  alchatti/drupal:apache-fpm
-
-docker exec apache-php-test verify-apache-php.sh
-docker rm -f apache-php-test
+PHP_UPLOAD_MAX_FILESIZE=128M \
+PHP_POST_MAX_SIZE=129M \
+PHP_MAX_EXECUTION_TIME=180 \
+EXPECTED_PHP_SAPI=fpm-fcgi \
+./test/test-apache-php.sh alchatti/drupal:apache-fpm
 ```
 
-A temporary test file is created under the document root and removed automatically after the test.
+The probe PHP file is written to a temporary directory on the host, mounted as the web root, and removed automatically after the test.
 
 ## Build locally
 
