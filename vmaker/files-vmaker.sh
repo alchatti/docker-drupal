@@ -4,16 +4,16 @@ set -Eeuo pipefail
 : "${FILES_DIR:=/mnt/files}"
 : "${PAYLOAD_DIR:=/payload}"
 : "${ARCHIVE_DIR:=/archive}"
-: "${FACILITATOR_ACTION:=seed}"
+: "${VMAKER_ACTION:=seed}"
 : "${CLEAR_TARGET:=0}"
 : "${ARCHIVE_NAME:=drupal-files.tar.gz}"
 
 log() {
-    echo "[files-facilitator] $*"
+    echo "[files-vmaker] $*"
 }
 
 fail() {
-    echo "[files-facilitator] ERROR: $*" >&2
+    echo "[files-vmaker] ERROR: $*" >&2
     exit 1
 }
 
@@ -155,7 +155,7 @@ status_volume() {
 show_usage() {
     cat <<USAGE
 Usage:
-  files-facilitator.sh [init|seed|archive|restore|status]
+  files-vmaker.sh [init|seed|archive|restore|status]
 
 Actions:
   init      Create the expected Drupal files directory structure.
@@ -178,7 +178,7 @@ Notes:
 USAGE
 }
 
-action="${1:-${FACILITATOR_ACTION}}"
+action="${1:-${VMAKER_ACTION}}"
 
 case "${action}" in
     init)

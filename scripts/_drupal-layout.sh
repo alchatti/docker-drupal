@@ -14,7 +14,7 @@
 #
 # The runtime entrypoint does not migrate or create application public files.
 # Volume initialization, seeding, backup, and restore are handled by the
-# facilitator image.
+# vmaker image.
 
 clean_path_segment() {
     if [ "$#" -ne 1 ]; then

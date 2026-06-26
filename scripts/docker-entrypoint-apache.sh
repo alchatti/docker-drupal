@@ -16,7 +16,7 @@ set -euo pipefail
 #
 # The runtime entrypoint verifies the symlink but does not create or migrate
 # public files. Volume folder creation, seeding, archive, and restore are owned
-# by the facilitator image.
+# by the vmaker image.
 #
 # Runtime Controls:
 #   DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
