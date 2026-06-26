@@ -31,6 +31,7 @@ ENV FILES_DIR=/mnt/files \
 
 RUN set -eux; \
   apt-get update; \
+  apt-get upgrade -y; \
   apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
