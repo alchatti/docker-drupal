@@ -115,9 +115,13 @@ RUN set -eux; \
   configure-drupal-runtime.sh; \
   generate-s6-services.sh; \
   chown -R root:root /etc/s6-overlay; \
+  # Solves s6 rootless run warning
+  mkdir -p /run ;\
+  chown www-data:www-data /run ;\
   # Runtime Dependency
-  install-runtimes.sh --mariadb; \
-  mkdir -p /_config/drupal
+  mkdir -p /_config/drupal ;\
+  install-runtimes.sh --mariadb
+  
 COPY --chown=www-data:www-data --chmod=644 settings.docker.php /_config/drupal/settings.docker.php
 
 WORKDIR /app
