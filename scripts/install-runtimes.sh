@@ -104,6 +104,7 @@ if [ "${INSTALL_MARIADB}" = false ] \
 fi
 
 NEEDS_PECL=false
+PECL_BUILD_DEPS=""
 
 if [ "${INSTALL_REDIS}" = true ] \
     || [ "${INSTALL_MEMCACHED}" = true ] \
@@ -129,6 +130,7 @@ fi
 
 if [ "${NEEDS_PECL}" = true ]; then
     packages="${packages} ${PHPIZE_DEPS:-autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c}"
+    PECL_BUILD_DEPS="${PHPIZE_DEPS:-autoconf dpkg-dev file g++ gcc libc-dev make pkg-config re2c}"
 fi
 
 if [ "${INSTALL_MEMCACHED}" = true ]; then
@@ -151,18 +153,23 @@ if [ "${INSTALL_SQLITE}" = true ]; then
 fi
 
 if [ "${INSTALL_REDIS}" = true ]; then
-    pecl install redis
+    pecl install redis-6.1.0
     docker-php-ext-enable redis
 fi
 
 if [ "${INSTALL_MEMCACHED}" = true ]; then
-    pecl install memcached
+    pecl install memcached-3.2.0
     docker-php-ext-enable memcached
 fi
 
 if [ "${INSTALL_IMAGICK}" = true ]; then
-    pecl install imagick
+    pecl install imagick-3.7.0
     docker-php-ext-enable imagick
+fi
+
+if [ "${NEEDS_PECL}" = true ] && [ -n "${PECL_BUILD_DEPS}" ]; then
+    # shellcheck disable=SC2086
+    apt-get purge -y --auto-remove ${PECL_BUILD_DEPS}
 fi
 
 rm -rf /tmp/pear ~/.pearrc /var/lib/apt/lists/*

@@ -115,20 +115,9 @@ RUN set -eux; \
   configure-drupal-runtime.sh; \
   generate-s6-services.sh; \
   chown -R root:root /etc/s6-overlay; \
-  chown -R www-data:www-data \
-    "${APP_ROOT}" \
-    /var/www \
-    "${CONFIG_ROOT}" \
-    "${FILES_DIR}" \
-    /var/run/apache2 \
-    /var/lock/apache2 \
-    /var/log/apache2 \
-    /var/run/php \
-    /etc/apache2; \
-    # Runtime Dependency
-    install-runtimes.sh --mariadb
-
-RUN mkdir -p /_config/drupal
+  # Runtime Dependency
+  install-runtimes.sh --mariadb; \
+  mkdir -p /_config/drupal
 COPY --chown=www-data:www-data --chmod=644 settings.docker.php /_config/drupal/settings.docker.php
 
 WORKDIR /app

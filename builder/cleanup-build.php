@@ -13,6 +13,11 @@
 $root = $argv[1] ?? '/app';
 $dryRun = in_array('--dry-run', $argv);
 
+if (!str_starts_with($root, '/') || !is_dir($root)) {
+    fwrite(STDERR, "❌ Root must be an existing absolute path: $root\n");
+    exit(1);
+}
+
 $configPath = '/usr/local/bin/cleanup.json';
 if (!file_exists($configPath)) {
     fwrite(STDERR, "❌ cleanup.json missing @ $configPath\n");
@@ -20,7 +25,7 @@ if (!file_exists($configPath)) {
 }
 
 $config = json_decode(file_get_contents($configPath), true);
-if (!$config) {
+if ($config === null) {
     fwrite(STDERR, "❌ Invalid JSON in cleanup.json\n");
     exit(1);
 }
@@ -83,7 +88,7 @@ $directory = new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::S
 $iterator  = new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::CHILD_FIRST);
 
 foreach ($iterator as $path => $info) {
-    $relative = str_replace($root, '', $path);
+    $relative = substr($path, strlen(rtrim($root, '/')));
 
     // Skip protected
     if (isProtected($relative, $protectedPaths)) {
