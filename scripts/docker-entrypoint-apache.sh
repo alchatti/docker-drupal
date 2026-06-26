@@ -149,9 +149,17 @@ prepare_public_root() {
         mkdir -p "${DOC_ROOT}"
     fi
 
+    # Capture whether a real app already exists before the placeholder may be created.
+    _app_pre_existed=0
+    if [ -f "${DOC_ROOT}/index.php" ]; then
+        _app_pre_existed=1
+    fi
+
     create_missing_app_index
 
-    if [ -f "${DOC_ROOT}/index.php" ] && [ "$(basename "${DOC_ROOT}")" = "web" ]; then
+    # Validate the public-files symlink only when an application was genuinely
+    # present before this entrypoint ran; skip when running on the placeholder.
+    if [ "${_app_pre_existed}" = "1" ] && [ "$(basename "${DOC_ROOT}")" = "web" ]; then
         validate_app_files_symlink
     fi
 

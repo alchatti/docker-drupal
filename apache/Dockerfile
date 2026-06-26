@@ -81,19 +81,9 @@ COPY --chmod=755 scripts/ /usr/local/bin/
 RUN set -eux; \
   install-php-dependencies.sh; \
   configure-drupal-runtime.sh; \
-  chown -R www-data:www-data \
-    "${APP_ROOT}" \
-    /var/www \
-    "${CONFIG_ROOT}" \
-    "${FILES_DIR}" \
-    /var/run/apache2 \
-    /var/lock/apache2 \
-    /var/log/apache2 \
-    /etc/apache2; \
-    # Runtime Dependency
-    install-runtimes.sh --mariadb
-
-RUN mkdir -p /_config/drupal
+  # Runtime Dependency
+  install-runtimes.sh --mariadb; \
+  mkdir -p /_config/drupal
 COPY --chown=www-data:www-data --chmod=644 settings.docker.php /_config/drupal/settings.docker.php
 
 WORKDIR /app

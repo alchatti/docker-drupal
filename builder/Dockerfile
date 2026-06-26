@@ -1,5 +1,5 @@
 # Global Scope Arguments
-ARG PHP=8.1
+ARG PHP=8.4
 ARG OS=bookworm
 ARG NODE=22
 ARG CREATE_DATE="NA"
@@ -33,8 +33,8 @@ ENV NODE=${NODE} \
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
 # Copy scripts to /usr/local/bin with execution permissions
-COPY --chmod=+x scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
-COPY --chmod=+x scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
+COPY --chmod=755 scripts/install-php-dependencies.sh /usr/local/bin/install-php-dependencies.sh
+COPY --chmod=755 scripts/verify-builder.sh /usr/local/bin/verify-builder.sh
 
 # Install Node.js, PHP extensions/dependencies, and prepare writable non-root paths
 RUN set -eux; \
@@ -58,7 +58,7 @@ RUN set -eux; \
       /var/www/.npm; \
     rm -rf /var/lib/apt/lists/*
 
-COPY --chmod=+x builder/cleanup-build.php /usr/local/bin/cleanup-build
+COPY --chmod=755 builder/cleanup-build.php /usr/local/bin/cleanup-build
 COPY --chmod=644 builder/cleanup.json /usr/local/bin/cleanup.json
 
 WORKDIR /app

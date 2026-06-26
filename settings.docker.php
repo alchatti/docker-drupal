@@ -91,9 +91,12 @@ $database = [
 ];
 
 if ($database_driver === 'mysql') {
+    // charset and collation are MySQL/MariaDB-specific; other drivers (pgsql,
+    // sqlite) do not use these connection parameters.
+    $database['charset'] = $container_env('DB_CHARSET', 'utf8mb4');
     $database['collation'] = $container_env(
         'DB_COLLATION',
-        'utf8mb4_general_ci',
+        'utf8mb4_unicode_ci',
     );
 }
 
@@ -141,6 +144,13 @@ if (
  * Supply a semicolon-separated list
  *
  * DRUPAL_TRUSTED_PROXIES=172.18.0.0/16;10.0.0.0/8
+ *
+ * Header forwarding preset (default: traefik):
+ *   traefik   — X-Forwarded-* headers as forwarded by Traefik
+ *   all       — all X-Forwarded-* headers (nginx, HAProxy, etc.)
+ *   forwarded — RFC 7239 Forwarded header only
+ *
+ * DRUPAL_REVERSE_PROXY_HEADERS=traefik
  */
 if ($container_env_bool('DRUPAL_REVERSE_PROXY')) {
     $trusted_proxies_value = getenv('DRUPAL_TRUSTED_PROXIES');
@@ -165,8 +175,13 @@ if ($container_env_bool('DRUPAL_REVERSE_PROXY')) {
     $settings['reverse_proxy'] = true;
     $settings['reverse_proxy_addresses'] = $trusted_proxies;
 
-    $settings['reverse_proxy_trusted_headers'] =
-        \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_TRAEFIK;
+    $proxy_headers_preset = $container_env('DRUPAL_REVERSE_PROXY_HEADERS', 'traefik');
+
+    $settings['reverse_proxy_trusted_headers'] = match ($proxy_headers_preset) {
+        'all'       => \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_ALL,
+        'forwarded' => \Symfony\Component\HttpFoundation\Request::HEADER_FORWARDED,
+        default     => \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_TRAEFIK,
+    };
 }
 
 /**

@@ -42,7 +42,7 @@
     ".cache"
   ],
   "protectedPaths": [
-    "/recipes",
-    "/vendor"
+    "recipes",
+    "vendor"
   ]
 }

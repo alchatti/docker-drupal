@@ -119,6 +119,8 @@ if [ "${DRUPAL_RUNTIME_MODE}" = "s6-fpm" ]; then
 daemonize = no
 
 [www]
+; user/group are intentionally empty: PHP-FPM inherits the master process
+; identity (www-data) so no privilege drop occurs in the rootless s6 setup.
 user =
 group =
 listen = ${FPM_SOCKET}
