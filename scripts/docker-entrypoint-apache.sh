@@ -8,8 +8,7 @@ set -euo pipefail
 # Runtime Controls:
 #   DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
 #   APP_ROOT: Drupal project root, default /app
-#   DRUPAL_PUBLIC_DIR: web | docroot, default web
-#   DOC_ROOT: optional absolute override for Drupal public docroot
+#   DOC_ROOT: optional absolute override; defaults to ${APP_ROOT}/web
 #   PUBLIC_ROOT: Apache public root, default /var/www/html
 #   DRUPAL_SUBDIR: optional URL subdirectory, e.g. test-site or /test-site
 #
@@ -24,8 +23,6 @@ set -euo pipefail
 #
 # Result:
 #   /app/web/files -> /mnt/files/public
-#   or
-#   /app/docroot/files -> /mnt/files/public
 #
 # Missing app fallback:
 #   APP_MISSING_PLACEHOLDER=1
@@ -34,14 +31,13 @@ set -euo pipefail
 #
 # Layout:
 #   APP_ROOT=/app
-#   DRUPAL_PUBLIC_DIR=web      -> DOC_ROOT=/app/web
-#   DRUPAL_PUBLIC_DIR=docroot  -> DOC_ROOT=/app/docroot
+#   DOC_ROOT=/app/web (always)
 #
 #   DRUPAL_SUBDIR empty:
-#     /var/www/html -> /app/web or /app/docroot
+#     /var/www/html -> /app/web
 #
 #   DRUPAL_SUBDIR=test-site:
-#     /var/www/html/test-site -> /app/web or /app/docroot
+#     /var/www/html/test-site -> /app/web
 #
 #   Public files with subdir:
 #     /test-site/files/... -> /mnt/files/public/...
@@ -77,7 +73,6 @@ fi
 
 : "${APP_ROOT:=/app}"
 : "${PUBLIC_ROOT:=/var/www/html}"
-: "${DRUPAL_PUBLIC_DIR:=web}"
 : "${DOC_ROOT:=}"
 : "${DRUPAL_SUBDIR:=}"
 
@@ -88,7 +83,7 @@ fi
 
 : "${APP_MISSING_PLACEHOLDER:=1}"
 : "${APP_MISSING_HTTP_STATUS:=503}"
-: "${APP_MISSING_MESSAGE:=Drupal application was not found. Please mount or copy the application code into APP_ROOT and ensure DRUPAL_PUBLIC_DIR points to web or docroot.}"
+: "${APP_MISSING_MESSAGE:=Drupal application was not found. Please mount or copy the application code into APP_ROOT and ensure the web directory exists.}"
 
 : "${APACHE_CONFIG_DIR:=/_config/apache}"
 : "${FPM_RUNTIME_CONF:=/usr/local/etc/php-fpm.d/zz-runtime.conf}"
@@ -152,7 +147,6 @@ header('X-Drupal-Runtime: missing-application');
 echo $message . PHP_EOL;
 echo PHP_EOL;
 echo 'APP_ROOT=' . (getenv('APP_ROOT') ?: '/app') . PHP_EOL;
-echo 'DRUPAL_PUBLIC_DIR=' . (getenv('DRUPAL_PUBLIC_DIR') ?: 'web') . PHP_EOL;
 echo 'DOC_ROOT=' . (getenv('DOC_ROOT') ?: '') . PHP_EOL;
 PHP_MISSING_APP
 
@@ -400,7 +394,6 @@ fi
 
 echo "[system-init] Runtime initialization complete."
 echo "[system-init] APP_ROOT=${APP_ROOT}"
-echo "[system-init] DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}"
 echo "[system-init] DOC_ROOT=${DOC_ROOT}"
 echo "[system-init] PUBLIC_ROOT=${PUBLIC_ROOT}"
 echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-}"

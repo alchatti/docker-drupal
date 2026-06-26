@@ -148,24 +148,10 @@ move_dir_contents_safely() {
 }
 
 resolve_doc_root() {
-    local public_dir
-
-    public_dir="$(clean_path_segment "${DRUPAL_PUBLIC_DIR:-web}")"
-
-    case "${public_dir}" in
-        web|docroot)
-            ;;
-        *)
-            echo "ERROR: Invalid DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
-            echo "Allowed values: web, docroot" >&2
-            exit 1
-            ;;
-    esac
-
     require_absolute_path "APP_ROOT" "${APP_ROOT:-}"
 
     if [ -z "${DOC_ROOT:-}" ]; then
-        DOC_ROOT="${APP_ROOT}/${public_dir}"
+        DOC_ROOT="${APP_ROOT}/web"
     fi
 
     require_absolute_path "DOC_ROOT" "${DOC_ROOT}"

@@ -41,7 +41,6 @@ LABEL org.opencontainers.image.title="Drupal Apache PHP-FPM s6 runtime" \
 
 ENV DRUPAL_RUNTIME_MODE=s6-fpm \
   DRUPAL_SUBDIR= \
-  DRUPAL_PUBLIC_DIR=web \
   APACHE_PORT=8080 \
   APP_ROOT=/app \
   DOC_ROOT= \

@@ -5,7 +5,6 @@ APACHE_PORT="${APACHE_PORT:-8080}"
 
 APP_ROOT="${APP_ROOT:-/app}"
 PUBLIC_ROOT="${PUBLIC_ROOT:-/var/www/html}"
-DRUPAL_PUBLIC_DIR="${DRUPAL_PUBLIC_DIR:-web}"
 DOC_ROOT="${DOC_ROOT:-}"
 DRUPAL_SUBDIR="${DRUPAL_SUBDIR:-}"
 
@@ -145,7 +144,6 @@ fi
 echo "Verifying Apache and PHP..."
 echo "Runtime mode: ${DRUPAL_RUNTIME_MODE:-unknown}"
 echo "App root: ${APP_ROOT}"
-echo "Drupal public dir: ${DRUPAL_PUBLIC_DIR}"
 echo "Resolved document root: ${DOC_ROOT}"
 echo "Apache public root: ${PUBLIC_ROOT}"
 echo "Drupal subdir: ${CLEAN_SUBDIR:-}"
@@ -320,7 +318,6 @@ echo "PHP SAPI: ${sapi}"
 echo
 echo "Resolved layout:"
 echo "APP_ROOT: ${APP_ROOT}"
-echo "DRUPAL_PUBLIC_DIR: ${DRUPAL_PUBLIC_DIR}"
 echo "DOC_ROOT: ${DOC_ROOT}"
 echo "PUBLIC_ROOT: ${PUBLIC_ROOT}"
 echo "DRUPAL_SUBDIR: ${CLEAN_SUBDIR:-}"
