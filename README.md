@@ -266,7 +266,6 @@ This file applies environment-driven Drupal runtime settings such as file paths,
 | Variable | Default | Description |
 |---|---:|---|
 | `APP_ROOT` | `/app` | Drupal project root mounted inside the container |
-| `DOC_ROOT` | `${APP_ROOT}/web` | Runtime docroot is always `${APP_ROOT}/web`; only `APP_ROOT` is configurable |
 | `PUBLIC_ROOT` | `/var/www/html` | Apache-served public path symlinked to the resolved Drupal docroot |
 | `FILES_DIR` | `/mnt/files` | External files mount path |
 | `DRUPAL_SUBDIR` | empty | Optional Apache alias path |
