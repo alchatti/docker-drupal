@@ -14,13 +14,14 @@
 #   IMAGE=my/image:tag ./test/test-apache-php.sh
 #
 # Configuration (env-overridable):
-#   DRUPAL_SUBDIR              URL sub-path, default: test-site
+#   DRUPAL_SUBDIR              URL sub-path (leading/trailing slashes stripped), default: test-site
 #   PHP_UPLOAD_MAX_FILESIZE    Expected value, also passed to container, default: 128M
 #   PHP_POST_MAX_SIZE          Expected value, also passed to container, default: 129M
 #   PHP_MAX_EXECUTION_TIME     Expected value, also passed to container, default: 180
 #   TZ_EXPECTED                Expected PHP timezone, default: Asia/Dubai
 #   EXPECTED_PHP_SAPI          When set, validates PHP_SAPI (e.g. apache2handler, fpm-fcgi)
-#   HOST_PORT                  Port to publish on the host, default: 8080
+#   HOST_PORT                  Host port mapped to the container, default: 8080
+#   APACHE_PORT                Port Apache listens on inside the container, default: 8080
 #   RETRIES                    Number of readiness poll attempts, default: 30
 #   RETRY_DELAY                Seconds between retries, default: 2
 
@@ -35,10 +36,15 @@ PHP_MAX_EXECUTION_TIME="${PHP_MAX_EXECUTION_TIME:-180}"
 TZ_EXPECTED="${TZ_EXPECTED:-Asia/Dubai}"
 EXPECTED_PHP_SAPI="${EXPECTED_PHP_SAPI:-}"
 HOST_PORT="${HOST_PORT:-8080}"
-APACHE_PORT="${APACHE_PORT:-8080}"
+APACHE_PORT="${APACHE_PORT:-8080}"  # Port the container listens on internally
 RETRIES="${RETRIES:-30}"
 RETRY_DELAY="${RETRY_DELAY:-2}"
 EXPECTED_MESSAGE="${EXPECTED_MESSAGE:-Hello, Drupal Developer!}"
+
+# Normalise DRUPAL_SUBDIR: strip any leading/trailing slashes so the value is
+# safe to use both as a container env var and as a URL path segment.
+DRUPAL_SUBDIR="${DRUPAL_SUBDIR#/}"
+DRUPAL_SUBDIR="${DRUPAL_SUBDIR%/}"
 
 NAME="apache-php-test-${IMAGE//[^a-zA-Z0-9_.-]/-}"
 WORKDIR="$(mktemp -d)"
