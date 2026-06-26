@@ -1,175 +1,206 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 : "${FILES_DIR:=/mnt/files}"
 : "${PAYLOAD_DIR:=/payload}"
 : "${ARCHIVE_DIR:=/archive}"
 : "${FACILITATOR_ACTION:=seed}"
 : "${CLEAR_TARGET:=0}"
-: "${FIX_OWNERSHIP:=1}"
-: "${FILES_UID:=33}"
-: "${FILES_GID:=33}"
 : "${ARCHIVE_NAME:=drupal-files.tar.gz}"
 
-ACTION="${1:-${FACILITATOR_ACTION}}"
+log() {
+    echo "[files-facilitator] $*"
+}
+
+fail() {
+    echo "[files-facilitator] ERROR: $*" >&2
+    exit 1
+}
 
 require_absolute_path() {
     local name="$1"
     local value="$2"
 
     if [ -z "${value}" ]; then
-        echo "ERROR: ${name} must not be empty." >&2
-        exit 1
+        fail "${name} must not be empty."
     fi
 
     case "${value}" in
         /*) ;;
-        *)
-            echo "ERROR: ${name} must be an absolute path. Current value: ${value}" >&2
-            exit 1
-            ;;
+        *) fail "${name} must be an absolute path. Current value: ${value}" ;;
     esac
 }
 
-safe_clear_files_dir() {
-    case "${FILES_DIR}" in
-        ""|"/"|"/mnt"|"/mnt/"|"/app"|"/app/")
-            echo "ERROR: Refusing to clear unsafe FILES_DIR=${FILES_DIR}" >&2
-            exit 1
+safe_clear_directory() {
+    local target="$1"
+
+    require_absolute_path "target" "${target}"
+
+    case "${target}" in
+        /|/mnt|/mnt/|/payload|/payload/|/archive|/archive/)
+            fail "Refusing to clear unsafe directory: ${target}"
             ;;
     esac
 
-    find "${FILES_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    if [ ! -d "${target}" ]; then
+        mkdir -p "${target}"
+        return
+    fi
+
+    find "${target}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 }
 
-init_structure() {
+prepare_files_structure() {
+    require_absolute_path "FILES_DIR" "${FILES_DIR}"
+    require_absolute_path "PAYLOAD_DIR" "${PAYLOAD_DIR}"
+    require_absolute_path "ARCHIVE_DIR" "${ARCHIVE_DIR}"
+
     mkdir -p \
         "${FILES_DIR}/public" \
         "${FILES_DIR}/private" \
         "${FILES_DIR}/tmp" \
-        "${FILES_DIR}/config/sync"
+        "${FILES_DIR}/config/sync" \
+        "${PAYLOAD_DIR}" \
+        "${ARCHIVE_DIR}"
 
-    echo "[facilitator] Files structure ready under ${FILES_DIR}"
+    log "Files structure is ready at ${FILES_DIR}"
 }
 
-copy_tree_if_present() {
+copy_payload_dir() {
     local source_dir="$1"
     local target_dir="$2"
+    local label="$3"
 
     if [ ! -d "${source_dir}" ]; then
+        log "No ${label} payload found at ${source_dir}; skipping."
         return
     fi
 
     mkdir -p "${target_dir}"
 
-    if [ -z "$(find "${source_dir}" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
-        echo "[facilitator] Payload directory is empty, skipping: ${source_dir}"
-        return
+    if [ "${CLEAR_TARGET}" = "1" ]; then
+        log "CLEAR_TARGET=1; clearing ${target_dir}"
+        safe_clear_directory "${target_dir}"
     fi
 
-    echo "[facilitator] Copying ${source_dir}/ -> ${target_dir}/"
+    log "Seeding ${label}: ${source_dir} -> ${target_dir}"
     cp -a "${source_dir}/." "${target_dir}/"
 }
 
-seed_payload() {
-    init_structure
+init_volume() {
+    prepare_files_structure
+    log "Initialization completed."
+}
+
+seed_volume() {
+    prepare_files_structure
+
+    copy_payload_dir "${PAYLOAD_DIR}/public" "${FILES_DIR}/public" "public files"
+    copy_payload_dir "${PAYLOAD_DIR}/private" "${FILES_DIR}/private" "private files"
+    copy_payload_dir "${PAYLOAD_DIR}/tmp" "${FILES_DIR}/tmp" "temporary files"
+    copy_payload_dir "${PAYLOAD_DIR}/config/sync" "${FILES_DIR}/config/sync" "config sync"
+
+    log "Seed completed."
+}
+
+archive_volume() {
+    local archive_path
+
+    prepare_files_structure
+
+    archive_path="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
+
+    log "Creating archive: ${archive_path}"
+    tar -C "${FILES_DIR}" -czf "${archive_path}" .
+    log "Archive created: ${archive_path}"
+}
+
+restore_volume() {
+    local archive_path
+
+    prepare_files_structure
+
+    archive_path="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
+
+    if [ ! -f "${archive_path}" ]; then
+        fail "Archive not found: ${archive_path}"
+    fi
 
     if [ "${CLEAR_TARGET}" = "1" ]; then
-        echo "[facilitator] CLEAR_TARGET=1, clearing ${FILES_DIR} before seeding."
-        safe_clear_files_dir
-        init_structure
+        log "CLEAR_TARGET=1; clearing ${FILES_DIR} before restore."
+        safe_clear_directory "${FILES_DIR}"
+        prepare_files_structure
     fi
 
-    copy_tree_if_present "${PAYLOAD_DIR}/public" "${FILES_DIR}/public"
-    copy_tree_if_present "${PAYLOAD_DIR}/private" "${FILES_DIR}/private"
-    copy_tree_if_present "${PAYLOAD_DIR}/tmp" "${FILES_DIR}/tmp"
-    copy_tree_if_present "${PAYLOAD_DIR}/config/sync" "${FILES_DIR}/config/sync"
-
-    if [ -f "${PAYLOAD_DIR}/${ARCHIVE_NAME}" ]; then
-        echo "[facilitator] Found payload archive: ${PAYLOAD_DIR}/${ARCHIVE_NAME}"
-        restore_archive "${PAYLOAD_DIR}/${ARCHIVE_NAME}"
-    fi
+    log "Restoring archive: ${archive_path} -> ${FILES_DIR}"
+    tar -C "${FILES_DIR}" -xzf "${archive_path}"
+    prepare_files_structure
+    log "Restore completed."
 }
 
-archive_files() {
-    init_structure
-    mkdir -p "${ARCHIVE_DIR}"
+status_volume() {
+    prepare_files_structure
 
-    local output="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
-
-    echo "[facilitator] Creating archive: ${output}"
-    tar -C "${FILES_DIR}" -czf "${output}" .
-    echo "[facilitator] Archive created: ${output}"
-}
-
-restore_archive() {
-    local archive_file="${1:-${ARCHIVE_DIR}/${ARCHIVE_NAME}}"
-
-    if [ ! -f "${archive_file}" ]; then
-        echo "ERROR: Archive file not found: ${archive_file}" >&2
-        exit 1
-    fi
-
-    init_structure
-
-    if [ "${CLEAR_TARGET}" = "1" ]; then
-        echo "[facilitator] CLEAR_TARGET=1, clearing ${FILES_DIR} before restore."
-        safe_clear_files_dir
-        init_structure
-    fi
-
-    echo "[facilitator] Restoring archive ${archive_file} into ${FILES_DIR}"
-    tar -C "${FILES_DIR}" -xzf "${archive_file}"
-    echo "[facilitator] Restore completed."
-}
-
-fix_ownership() {
-    if [ "${FIX_OWNERSHIP}" != "1" ]; then
-        echo "[facilitator] Ownership fix disabled."
-        return
-    fi
-
-    echo "[facilitator] Setting ownership ${FILES_UID}:${FILES_GID} on ${FILES_DIR}"
-    chown -R "${FILES_UID}:${FILES_GID}" "${FILES_DIR}"
-}
-
-print_status() {
-    init_structure
-
-    echo "[facilitator] Status"
+    log "Status"
     echo "FILES_DIR=${FILES_DIR}"
     echo "PAYLOAD_DIR=${PAYLOAD_DIR}"
     echo "ARCHIVE_DIR=${ARCHIVE_DIR}"
     echo "ARCHIVE_NAME=${ARCHIVE_NAME}"
-    find "${FILES_DIR}" -maxdepth 3 -mindepth 1 -print | sort
+    echo
+
+    log "Top-level files directory structure"
+    find "${FILES_DIR}" -maxdepth 3 -mindepth 0 -print | sort
 }
 
-require_absolute_path "FILES_DIR" "${FILES_DIR}"
-require_absolute_path "PAYLOAD_DIR" "${PAYLOAD_DIR}"
-require_absolute_path "ARCHIVE_DIR" "${ARCHIVE_DIR}"
+show_usage() {
+    cat <<USAGE
+Usage:
+  files-facilitator.sh [init|seed|archive|restore|status]
 
-case "${ACTION}" in
+Actions:
+  init      Create the expected Drupal files directory structure.
+  seed      Copy payload files into the Drupal files volume.
+  archive   Create a tar.gz archive from the Drupal files volume.
+  restore   Restore a tar.gz archive into the Drupal files volume.
+  status    Show the current directory structure.
+
+Environment:
+  FILES_DIR=${FILES_DIR}
+  PAYLOAD_DIR=${PAYLOAD_DIR}
+  ARCHIVE_DIR=${ARCHIVE_DIR}
+  ARCHIVE_NAME=${ARCHIVE_NAME}
+  CLEAR_TARGET=${CLEAR_TARGET}
+
+Notes:
+  - This container runs as www-data.
+  - It is designed for Docker named volumes mounted at /mnt/files.
+  - It does not repair ownership and does not run chown.
+USAGE
+}
+
+action="${1:-${FACILITATOR_ACTION}}"
+
+case "${action}" in
     init)
-        init_structure
-        fix_ownership
+        init_volume
         ;;
     seed)
-        seed_payload
-        fix_ownership
+        seed_volume
         ;;
     archive)
-        archive_files
+        archive_volume
         ;;
     restore)
-        restore_archive "${2:-${ARCHIVE_DIR}/${ARCHIVE_NAME}}"
-        fix_ownership
+        restore_volume
         ;;
     status)
-        print_status
+        status_volume
+        ;;
+    help|--help|-h)
+        show_usage
         ;;
     *)
-        echo "ERROR: Unsupported facilitator action: ${ACTION}" >&2
-        echo "Supported actions: init, seed, archive, restore, status" >&2
-        exit 1
+        show_usage >&2
+        fail "Unknown action: ${action}"
         ;;
 esac
