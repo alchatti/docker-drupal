@@ -24,6 +24,7 @@ jobs:
       os_versions: '["trixie"]'
       blueprints: |
         {
+          "facilitator": {},
           "builder": {
             "build_args": ["NODE=24"],
             "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"

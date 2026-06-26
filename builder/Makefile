@@ -25,7 +25,7 @@ build:
 		--build-arg PHP=$(PHP_VERSION) \
 		--build-arg NODE=$(NODE_VERSION) \
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
-        --build-arg RELEASE='MAKE' \
+        --build-arg VERSION='MAKE' \
 		--no-cache \
 		-t $(IMAGE_NAME):latest \
 		-t $(IMAGE) .
@@ -45,3 +45,8 @@ check:
 		echo && echo '✅ Composer Version:' && composer --version && \
 		echo && echo '✅ Node Version:' && node --version && \
 		echo && echo '✅ NPM Version:' && npm --version"
+
+## ℹ️ Show available targets
+help:
+	@echo "Available targets:"
+	@awk '/^## / {desc = substr($$0, 4); next} /^[a-zA-Z0-9_.-]+:/ {target = $$1; sub(/:.*/, "", target); if (desc != "") {printf "  %-12s %s\n", target, desc; desc = ""}}' $(MAKEFILE_LIST)

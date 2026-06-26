@@ -5,12 +5,9 @@ APACHE_PORT="${APACHE_PORT:-8080}"
 
 APP_ROOT="${APP_ROOT:-/app}"
 PUBLIC_ROOT="${PUBLIC_ROOT:-/var/www/html}"
-DRUPAL_PUBLIC_DIR="${DRUPAL_PUBLIC_DIR:-web}"
-DOC_ROOT="${DOC_ROOT:-}"
 DRUPAL_SUBDIR="${DRUPAL_SUBDIR:-}"
 
 FILES_DIR="${FILES_DIR:-/mnt/files}"
-DRUPAL_LINK_PUBLIC_FILES="${DRUPAL_LINK_PUBLIC_FILES:-1}"
 DRUPAL_PUBLIC_FILES_PATH="${DRUPAL_PUBLIC_FILES_PATH:-files}"
 DRUPAL_PUBLIC_FILES_SOURCE="${DRUPAL_PUBLIC_FILES_SOURCE:-${FILES_DIR}/public}"
 
@@ -53,6 +50,23 @@ bootstrap_doc_root() {
 
     echo "Creating missing document root for CI: ${DOC_ROOT}"
     mkdir -p "${DOC_ROOT}"
+}
+
+bootstrap_public_files_symlink() {
+    local public_files_mount="${DOC_ROOT}/${DRUPAL_PUBLIC_FILES_PATH}"
+
+    mkdir -p "${DRUPAL_PUBLIC_FILES_SOURCE}"
+
+    if [ -L "${public_files_mount}" ]; then
+        return
+    fi
+
+    if [ -e "${public_files_mount}" ]; then
+        echo "ERROR: ${public_files_mount} exists but is not the expected symlink." >&2
+        exit 1
+    fi
+
+    ln -sfn "${DRUPAL_PUBLIC_FILES_SOURCE}" "${public_files_mount}"
 }
 
 prepare_public_mount() {
@@ -130,8 +144,8 @@ resolve_doc_root
 CLEAN_SUBDIR="$(clean_path_segment "${DRUPAL_SUBDIR}")"
 
 bootstrap_doc_root
-prepare_files_dir
-prepare_public_files
+bootstrap_public_files_symlink
+validate_app_files_symlink
 prepare_public_mount "${CLEAN_SUBDIR}"
 resolve_url "${CLEAN_SUBDIR}"
 resolve_public_file_url "${CLEAN_SUBDIR}"
@@ -145,7 +159,6 @@ fi
 echo "Verifying Apache and PHP..."
 echo "Runtime mode: ${DRUPAL_RUNTIME_MODE:-unknown}"
 echo "App root: ${APP_ROOT}"
-echo "Drupal public dir: ${DRUPAL_PUBLIC_DIR}"
 echo "Resolved document root: ${DOC_ROOT}"
 echo "Apache public root: ${PUBLIC_ROOT}"
 echo "Drupal subdir: ${CLEAN_SUBDIR:-}"
@@ -320,7 +333,6 @@ echo "PHP SAPI: ${sapi}"
 echo
 echo "Resolved layout:"
 echo "APP_ROOT: ${APP_ROOT}"
-echo "DRUPAL_PUBLIC_DIR: ${DRUPAL_PUBLIC_DIR}"
 echo "DOC_ROOT: ${DOC_ROOT}"
 echo "PUBLIC_ROOT: ${PUBLIC_ROOT}"
 echo "DRUPAL_SUBDIR: ${CLEAN_SUBDIR:-}"

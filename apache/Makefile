@@ -11,7 +11,7 @@ OS ?= trixie
 SITE ?= example
 
 IMAGE_NAME ?= local/drupal-apache
-IMAGE_TAG ?= p$(PHP)-n$(NODE_VERSION)-$(OS)
+IMAGE_TAG ?= p$(PHP)-$(OS)
 CONTAINER_NAME ?= drupal-apache
 
 TIMESTAMP := $(shell date +'%Y%m%d')
@@ -27,7 +27,6 @@ build:
 		--build-arg OS=$(OS) \
 		--build-arg PHP=$(PHP) \
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
-		--build-arg RELEASE='MAKE' \
 		--no-cache \
 		-t $(IMAGE) ..
 

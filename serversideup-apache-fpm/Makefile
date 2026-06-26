@@ -20,7 +20,7 @@ build:
 # Memory limit is optional; defaults to 2GB.
 run:
 	docker run --rm --name $(NAME) \
-		-p 8080:80 \
+		-p 8080:8080 \
 		$(IMAGE)
 
 # Check loaded PHP modules inside the running container
