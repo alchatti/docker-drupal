@@ -9,8 +9,6 @@ DOC_ROOT="${DOC_ROOT:-}"
 DRUPAL_SUBDIR="${DRUPAL_SUBDIR:-}"
 
 FILES_DIR="${FILES_DIR:-/mnt/files}"
-DRUPAL_LINK_PUBLIC_FILES="${DRUPAL_LINK_PUBLIC_FILES:-1}"
-DRUPAL_PUBLIC_FILES_PATH="${DRUPAL_PUBLIC_FILES_PATH:-files}"
 DRUPAL_PUBLIC_FILES_SOURCE="${DRUPAL_PUBLIC_FILES_SOURCE:-${FILES_DIR}/public}"
 
 TEST_FILE="${TEST_FILE:-__apache_php_verify.php}"
@@ -109,14 +107,11 @@ resolve_url() {
 
 resolve_public_file_url() {
     local clean_subdir="$1"
-    local public_files_path
-
-    public_files_path="$(clean_path_segment "${DRUPAL_PUBLIC_FILES_PATH}")"
 
     if [ -n "${clean_subdir}" ]; then
-        PUBLIC_FILE_URL="http://127.0.0.1:${APACHE_PORT}/${clean_subdir}/${public_files_path}/${TEST_PUBLIC_FILE}"
+        PUBLIC_FILE_URL="http://127.0.0.1:${APACHE_PORT}/${clean_subdir}/files/${TEST_PUBLIC_FILE}"
     else
-        PUBLIC_FILE_URL="http://127.0.0.1:${APACHE_PORT}/${public_files_path}/${TEST_PUBLIC_FILE}"
+        PUBLIC_FILE_URL="http://127.0.0.1:${APACHE_PORT}/files/${TEST_PUBLIC_FILE}"
     fi
 
     PUBLIC_FILE_PATH="${DRUPAL_PUBLIC_FILES_SOURCE}/${TEST_PUBLIC_FILE}"
@@ -148,7 +143,6 @@ echo "Resolved document root: ${DOC_ROOT}"
 echo "Apache public root: ${PUBLIC_ROOT}"
 echo "Drupal subdir: ${CLEAN_SUBDIR:-}"
 echo "Files dir: ${FILES_DIR}"
-echo "Public files path: ${DRUPAL_PUBLIC_FILES_PATH}"
 echo "Public files source: ${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "Test file path: ${TEST_FILE_PATH}"
 echo "Public test path: ${PUBLIC_TEST_PATH}"
@@ -322,7 +316,6 @@ echo "DOC_ROOT: ${DOC_ROOT}"
 echo "PUBLIC_ROOT: ${PUBLIC_ROOT}"
 echo "DRUPAL_SUBDIR: ${CLEAN_SUBDIR:-}"
 echo "FILES_DIR: ${FILES_DIR}"
-echo "DRUPAL_PUBLIC_FILES_PATH: ${DRUPAL_PUBLIC_FILES_PATH}"
 echo "DRUPAL_PUBLIC_FILES_SOURCE: ${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "URL: ${URL}"
 

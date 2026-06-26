@@ -12,17 +12,13 @@ set -euo pipefail
 #   PUBLIC_ROOT: Apache public root, default /var/www/html
 #   DRUPAL_SUBDIR: optional URL subdirectory, e.g. test-site or /test-site
 #
-# Public files:
+# Public files (always enforced):
+#   /app/web/files -> /mnt/files/public
 #   FILES_DIR=/mnt/files
-#   DRUPAL_PUBLIC_FILES_PATH=files
 #   DRUPAL_PUBLIC_FILES_SOURCE=/mnt/files/public
-#   DRUPAL_LINK_PUBLIC_FILES=1
 #
 # Expected Drupal runtime setting:
-#   $settings['file_public_path'] = getenv('DRUPAL_PUBLIC_FILES_PATH') ?: 'files';
-#
-# Result:
-#   /app/web/files -> /mnt/files/public
+#   $settings['file_public_path'] = 'files';
 #
 # Missing app fallback:
 #   APP_MISSING_PLACEHOLDER=1
@@ -77,8 +73,6 @@ fi
 : "${DRUPAL_SUBDIR:=}"
 
 : "${FILES_DIR:=/mnt/files}"
-: "${DRUPAL_LINK_PUBLIC_FILES:=1}"
-: "${DRUPAL_PUBLIC_FILES_PATH:=files}"
 : "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
 
 : "${APP_MISSING_PLACEHOLDER:=1}"
@@ -398,7 +392,6 @@ echo "[system-init] DOC_ROOT=${DOC_ROOT}"
 echo "[system-init] PUBLIC_ROOT=${PUBLIC_ROOT}"
 echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-}"
 echo "[system-init] FILES_DIR=${FILES_DIR}"
-echo "[system-init] DRUPAL_PUBLIC_FILES_PATH=${DRUPAL_PUBLIC_FILES_PATH}"
 echo "[system-init] DRUPAL_PUBLIC_FILES_SOURCE=${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "[system-init] Handing control over to: $*"
 

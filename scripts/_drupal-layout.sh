@@ -177,41 +177,18 @@ prepare_files_dir() {
 }
 
 prepare_public_files() {
-    : "${DRUPAL_LINK_PUBLIC_FILES:=1}"
-    : "${DRUPAL_PUBLIC_FILES_PATH:=files}"
     : "${FILES_DIR:=/mnt/files}"
     : "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
 
-    local public_files_path
     local public_files_mount
     local current_target
-
-    if [ "${DRUPAL_LINK_PUBLIC_FILES}" != "1" ]; then
-        echo "[system-init] Public files symlink disabled."
-        return
-    fi
 
     require_absolute_path "DOC_ROOT" "${DOC_ROOT:-}"
     require_absolute_path "DRUPAL_PUBLIC_FILES_SOURCE" "${DRUPAL_PUBLIC_FILES_SOURCE}"
 
-    public_files_path="$(clean_path_segment "${DRUPAL_PUBLIC_FILES_PATH}")"
-
-    if [ -z "${public_files_path}" ]; then
-        echo "ERROR: DRUPAL_PUBLIC_FILES_PATH cannot be empty." >&2
-        exit 1
-    fi
-
-    case "${public_files_path}" in
-        *".."*|/*)
-            echo "ERROR: Invalid DRUPAL_PUBLIC_FILES_PATH=${DRUPAL_PUBLIC_FILES_PATH}" >&2
-            echo "Use a web-relative path such as: files" >&2
-            exit 1
-            ;;
-    esac
-
     mkdir -p "${DRUPAL_PUBLIC_FILES_SOURCE}"
 
-    public_files_mount="${DOC_ROOT}/${public_files_path}"
+    public_files_mount="${DOC_ROOT}/files"
 
     if [ -L "${public_files_mount}" ]; then
         current_target="$(readlink "${public_files_mount}")"
@@ -250,7 +227,7 @@ prepare_public_files() {
 
     if [ -e "${public_files_mount}" ]; then
         echo "ERROR: Public files path exists but is not a directory or symlink: ${public_files_mount}" >&2
-        echo "Remove it manually or change DRUPAL_PUBLIC_FILES_PATH." >&2
+        echo "Remove it manually and restart the container." >&2
         exit 1
     fi
 
