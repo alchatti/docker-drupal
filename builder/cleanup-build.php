@@ -88,7 +88,8 @@ $directory = new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::S
 $iterator  = new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::CHILD_FIRST);
 
 foreach ($iterator as $path => $info) {
-    $relative = substr($path, strlen(rtrim($root, '/')));
+    // Build a path-separator-stripped relative path so it matches protectedPaths entries.
+    $relative = substr($path, strlen(rtrim($root, '/')) + 1);
 
     // Skip protected
     if (isProtected($relative, $protectedPaths)) {

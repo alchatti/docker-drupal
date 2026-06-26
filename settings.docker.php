@@ -91,6 +91,8 @@ $database = [
 ];
 
 if ($database_driver === 'mysql') {
+    // charset and collation are MySQL/MariaDB-specific; other drivers (pgsql,
+    // sqlite) do not use these connection parameters.
     $database['charset'] = $container_env('DB_CHARSET', 'utf8mb4');
     $database['collation'] = $container_env(
         'DB_COLLATION',
