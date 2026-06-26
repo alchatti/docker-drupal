@@ -17,7 +17,6 @@ LABEL org.opencontainers.image.title="Drupal Apache mod_php runtime" \
 
 ENV DRUPAL_RUNTIME_MODE=mod_php \
   DRUPAL_SUBDIR= \
-  DRUPAL_PUBLIC_DIR=web \
   APACHE_PORT=8080 \
   APP_ROOT=/app \
   DOC_ROOT= \
