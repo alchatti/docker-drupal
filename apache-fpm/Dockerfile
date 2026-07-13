@@ -41,7 +41,6 @@ LABEL org.opencontainers.image.title="Drupal Apache PHP-FPM s6 runtime" \
 
 ENV DRUPAL_RUNTIME_MODE=s6-fpm \
   DRUPAL_SUBDIR= \
-  DRUPAL_PUBLIC_DIR=web \
   APACHE_PORT=8080 \
   APP_ROOT=/app \
   DOC_ROOT= \
@@ -116,18 +115,14 @@ RUN set -eux; \
   configure-drupal-runtime.sh; \
   generate-s6-services.sh; \
   chown -R root:root /etc/s6-overlay; \
-  chown -R www-data:www-data \
-    "${APP_ROOT}" \
-    /var/www \
-    "${CONFIG_ROOT}" \
-    "${FILES_DIR}" \
-    /var/run/apache2 \
-    /var/lock/apache2 \
-    /var/log/apache2 \
-    /var/run/php \
-    /etc/apache2; \
-    # Runtime Dependency
-    install-runtimes.sh --mariadb
+  # Solves s6 rootless run warning
+  mkdir -p /run ;\
+  chown www-data:www-data /run ;\
+  # Runtime Dependency
+  mkdir -p /_config/drupal ;\
+  install-runtimes.sh --mariadb
+  
+COPY --chown=www-data:www-data --chmod=644 settings.docker.php /_config/drupal/settings.docker.php
 
 WORKDIR /app
 

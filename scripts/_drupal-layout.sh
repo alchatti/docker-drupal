@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 # Shared Drupal layout helpers.
-# Sourced by docker-entrypoint-apache.sh and verify-apache-php.sh.
+# Sourced by docker-entrypoint-apache.sh.
 # Not intended to be executed directly.
+#
+# Opinionated layout:
+#   APP_ROOT=/app
+#   DOC_ROOT=/app/web
+#   PUBLIC_ROOT=/var/www/html
+#
+# Public files symlink policy:
+#   The application image must contain:
+#     /app/web/files -> /mnt/files/public
+#
+# The runtime entrypoint does not migrate or create application public files.
+# Volume initialization, seeding, backup, and restore are handled by the
+# vmaker image.
 
 clean_path_segment() {
     if [ "$#" -ne 1 ]; then
@@ -9,12 +22,31 @@ clean_path_segment() {
         exit 1
     fi
 
-    if [ -z "$1" ]; then
-        echo "ERROR: clean_path_segment argument must not be empty." >&2
+    # Empty is valid for optional values such as DRUPAL_SUBDIR.
+    printf '%s' "$1" | sed 's|^/||;s|/$||'
+}
+
+require_absolute_path() {
+    if [ "$#" -ne 2 ]; then
+        echo "ERROR: require_absolute_path expects variable name and value." >&2
         exit 1
     fi
 
-    printf '%s' "$1" | sed 's|^/||;s|/$||'
+    local name="$1"
+    local value="$2"
+
+    if [ -z "${value}" ]; then
+        echo "ERROR: ${name} must not be empty." >&2
+        exit 1
+    fi
+
+    case "${value}" in
+        /*) ;;
+        *)
+            echo "ERROR: ${name} must be an absolute path. Current value: ${value}" >&2
+            exit 1
+            ;;
+    esac
 }
 
 safe_rm_rf() {
@@ -26,67 +58,90 @@ safe_rm_rf() {
     local target="$1"
 
     case "${target}" in
-        ""|"/"|"/app"|"/app/"|"/var"|"/var/"|"/var/www"|"/var/www/"|"${APP_ROOT}"|"${APP_ROOT}/"|"${DOC_ROOT}"|"${DOC_ROOT}/")
+        ""|"/"|"/app"|"/app/"|"/var"|"/var/"|"/var/www"|"/var/www/")
             echo "ERROR: Refusing to remove unsafe path: ${target}" >&2
             exit 1
             ;;
     esac
 
+    if [ -n "${APP_ROOT:-}" ]; then
+        case "${target}" in
+            "${APP_ROOT}"|"${APP_ROOT}/")
+                echo "ERROR: Refusing to remove APP_ROOT: ${target}" >&2
+                exit 1
+                ;;
+        esac
+    fi
+
+    if [ -n "${DOC_ROOT:-}" ]; then
+        case "${target}" in
+            "${DOC_ROOT}"|"${DOC_ROOT}/")
+                echo "ERROR: Refusing to remove DOC_ROOT: ${target}" >&2
+                exit 1
+                ;;
+        esac
+    fi
+
     rm -rf "${target}"
 }
 
 resolve_doc_root() {
-    local public_dir
+    : "${APP_ROOT:=/app}"
+    : "${PUBLIC_ROOT:=/var/www/html}"
 
-    public_dir="$(clean_path_segment "${DRUPAL_PUBLIC_DIR:-web}")"
+    require_absolute_path "APP_ROOT" "${APP_ROOT}"
+    require_absolute_path "PUBLIC_ROOT" "${PUBLIC_ROOT}"
 
-    case "${public_dir}" in
-        web|docroot)
-            ;;
-        *)
-            echo "ERROR: Invalid DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}" >&2
-            echo "Allowed values: web, docroot" >&2
-            exit 1
-            ;;
-    esac
+    DOC_ROOT="${APP_ROOT}/web"
 
-    if [ -z "${APP_ROOT}" ]; then
-        echo "ERROR: APP_ROOT must not be empty." >&2
-        exit 1
-    fi
-
-    case "${APP_ROOT}" in
-        /*) ;;
-        *)
-            echo "ERROR: APP_ROOT must be an absolute path. Current value: ${APP_ROOT}" >&2
-            exit 1
-            ;;
-    esac
-
-    if [ -z "${DOC_ROOT}" ]; then
-        DOC_ROOT="${APP_ROOT}/${public_dir}"
-    fi
-
-    case "${DOC_ROOT}" in
-        /*) ;;
-        *)
-            echo "ERROR: DOC_ROOT must be an absolute path. Current value: ${DOC_ROOT}" >&2
-            exit 1
-            ;;
-    esac
-
-    if [ -z "${PUBLIC_ROOT}" ]; then
-        echo "ERROR: PUBLIC_ROOT must not be empty." >&2
-        exit 1
-    fi
-
-    case "${PUBLIC_ROOT}" in
-        /*) ;;
-        *)
-            echo "ERROR: PUBLIC_ROOT must be an absolute path. Current value: ${PUBLIC_ROOT}" >&2
-            exit 1
-            ;;
-    esac
+    require_absolute_path "DOC_ROOT" "${DOC_ROOT}"
 
     export DOC_ROOT
+}
+
+validate_app_files_symlink() {
+    : "${FILES_DIR:=/mnt/files}"
+    : "${DRUPAL_PUBLIC_FILES_PATH:=files}"
+    : "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
+
+    local public_files_path
+    local public_files_mount
+    local current_target
+
+    require_absolute_path "DOC_ROOT" "${DOC_ROOT:-}"
+    require_absolute_path "DRUPAL_PUBLIC_FILES_SOURCE" "${DRUPAL_PUBLIC_FILES_SOURCE}"
+
+    public_files_path="$(clean_path_segment "${DRUPAL_PUBLIC_FILES_PATH}")"
+
+    if [ -z "${public_files_path}" ]; then
+        echo "ERROR: DRUPAL_PUBLIC_FILES_PATH cannot be empty." >&2
+        exit 1
+    fi
+
+    case "${public_files_path}" in
+        *".."*|/*)
+            echo "ERROR: Invalid DRUPAL_PUBLIC_FILES_PATH=${DRUPAL_PUBLIC_FILES_PATH}" >&2
+            echo "Use a web-relative path such as: files" >&2
+            exit 1
+            ;;
+    esac
+
+    public_files_mount="${DOC_ROOT}/${public_files_path}"
+
+    if [ ! -L "${public_files_mount}" ]; then
+        echo "ERROR: Public files path must be a symlink created at app build time." >&2
+        echo "Expected: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}" >&2
+        exit 1
+    fi
+
+    current_target="$(readlink "${public_files_mount}")"
+
+    if [ "${current_target}" != "${DRUPAL_PUBLIC_FILES_SOURCE}" ]; then
+        echo "ERROR: Public files symlink points to the wrong target." >&2
+        echo "Expected: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}" >&2
+        echo "Actual:   ${public_files_mount} -> ${current_target}" >&2
+        exit 1
+    fi
+
+    echo "[system-init] Public files symlink verified: ${public_files_mount} -> ${DRUPAL_PUBLIC_FILES_SOURCE}"
 }

@@ -13,7 +13,7 @@ SITE ?= example
 MEM ?= 2
 
 IMAGE_NAME ?= local/drupal-apache-fpm
-IMAGE_TAG ?= p$(PHP)-n$(NODE_VERSION)-$(OS)
+IMAGE_TAG ?= p$(PHP)-$(OS)
 CONTAINER_NAME ?= drupal-apache-fpm
 
 TIMESTAMP := $(shell date +'%Y%m%d')
@@ -29,7 +29,6 @@ build:
 		--build-arg OS=$(OS) \
 		--build-arg PHP=$(PHP) \
 		--build-arg CREATE_DATE="$(TIMESTAMP)" \
-		--build-arg RELEASE='MAKE' \
 		--no-cache \
 		-t $(IMAGE) ..
 
@@ -47,15 +46,9 @@ run:
 
 ## 🔍 Run test | optional `make test SITE=example`
 test:
-	@echo "🔍 Running test script in $(IMAGE)..."
-	docker run -d --name $(CONTAINER_NAME)-test \
-	--memory=$(MEM)g \
-	-e DRUPAL_SUBDIR="$(SITE)" \
-	-p 8080:8080 \
-	"$(IMAGE)" \
-	&& sleep 5 \
-	&& docker exec $(CONTAINER_NAME)-test verify-apache-fpm-php.sh \
-	&& docker rm -f $(CONTAINER_NAME)-test
+	@echo "🔍 Running external test for $(IMAGE)..."
+	DRUPAL_SUBDIR="$(SITE)" \
+	bash ../test/test-apache-php.sh "$(IMAGE)"
 
 ## ℹ️ Show available targets
 help:

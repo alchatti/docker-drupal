@@ -24,17 +24,17 @@ jobs:
       os_versions: '["trixie"]'
       blueprints: |
         {
+          "apache-fpm": {
+            "test_command": "PHP_UPLOAD_MAX_FILESIZE=128M PHP_POST_MAX_SIZE=129M PHP_MAX_EXECUTION_TIME=180 EXPECTED_PHP_SAPI=fpm-fcgi ./test/test-apache-php.sh \"$IMAGE\""
+          },
+          "apache": {
+            "test_command": "PHP_UPLOAD_MAX_FILESIZE=128M PHP_POST_MAX_SIZE=129M PHP_MAX_EXECUTION_TIME=180 EXPECTED_PHP_SAPI=apache2handler ./test/test-apache-php.sh \"$IMAGE\""
+          },
           "builder": {
             "build_args": ["NODE=24"],
             "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
           },
-          "serversideup-apache-fpm": {},
-          "apache": {
-            "test_command": "NAME=\"apache-php-test-${IMAGE//[^a-zA-Z0-9_.-]/-}\"; docker rm -f \"$NAME\" >/dev/null 2>&1 || true; docker run -d --name \"$NAME\" -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs \"$NAME\" || true; docker rm -f \"$NAME\" || true; }; trap cleanup EXIT; for i in $(seq 1 30); do if docker exec \"$NAME\" verify-apache-php.sh; then exit 0; fi; sleep 2; done; echo \"ERROR: Apache PHP verification failed after retries\" >&2; exit 1"
-          },
-          "apache-fpm": {
-            "test_command": "NAME=\"apache-php-test-${IMAGE//[^a-zA-Z0-9_.-]/-}\"; docker rm -f \"$NAME\" >/dev/null 2>&1 || true; docker run -d --name \"$NAME\" -e DRUPAL_SUBDIR=/test-site -e PHP_UPLOAD_MAX_FILESIZE=128M -e PHP_POST_MAX_SIZE=129M -e PHP_MAX_EXECUTION_TIME=180 \"$IMAGE\"; cleanup() { docker logs \"$NAME\" || true; docker rm -f \"$NAME\" || true; }; trap cleanup EXIT; for i in $(seq 1 30); do if docker exec \"$NAME\" verify-apache-php.sh; then exit 0; fi; sleep 2; done; echo \"ERROR: Apache PHP-FPM verification failed after retries\" >&2; exit 1"
-          }
+          "vmaker": {}
         }
 
   build:

@@ -33,17 +33,19 @@ This repository supports a repeatable Drupal container workflow across local dev
 │   ├── Dockerfile
 │   ├── cleanup-build.php
 │   └── cleanup.json
-├── serversideup-apache-fpm/
-│   └── Dockerfile
+├── cron/
+│   └── README.md
+├── vmaker/
+│   ├── Dockerfile
+│   └── files-vmaker.sh
 ├── scripts/
+│   ├── _drupal-layout.sh
 │   ├── configure-drupal-runtime.sh
 │   ├── docker-entrypoint-apache.sh
 │   ├── generate-s6-services.sh
 │   ├── healthcheck.sh
-│   ├── install-builder-dependencies.sh
 │   ├── install-php-dependencies.sh
 │   ├── install-runtimes.sh
-│   ├── verify-apache-php.sh
 │   └── verify-builder.sh
 ├── app/
 ├── example/
@@ -134,11 +136,15 @@ Services are generated under:
 
 This means the image uses the s6-overlay v3 `s6-rc` service layout, not the legacy `/etc/services.d` layout.
 
-### `serversideup-apache-fpm`
+### `vmaker`
 
-Alternative runtime image based on `serversideup/php:<version>-fpm-apache-<os>`.
+A utility image for Drupal files volume initialization, seeding, archive, and restore workflows.
 
-This variant is useful when you want to compare or use the ServersideUp PHP base image while still applying this repository’s Drupal runtime dependency and verification approach.
+Reference:
+
+```text
+vmaker/README.md
+```
 
 ## Image tags
 
@@ -154,6 +160,7 @@ Examples:
 alchatti/drupal:8.4-apache-trixie
 alchatti/drupal:8.4-apache-fpm-trixie
 alchatti/drupal:8.4-builder-trixie
+alchatti/drupal:8.4-vmaker-trixie
 ```
 
 For the latest PHP and OS values in the matrix, a shorter variant tag is also generated:
@@ -162,6 +169,7 @@ For the latest PHP and OS values in the matrix, a shorter variant tag is also ge
 alchatti/drupal:apache
 alchatti/drupal:apache-fpm
 alchatti/drupal:builder
+alchatti/drupal:vmaker
 ```
 
 ### Branch tags
@@ -223,14 +231,34 @@ opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}
 
 This allows runtime overrides without rebuilding the image.
 
+### Drupal runtime settings file
+
+The runtime images ship a Drupal settings include at:
+
+```text
+/_config/drupal/settings.docker.php
+```
+
+Add the following to your Drupal site's `settings.php`:
+
+```php
+// Container runtime settings.
+$container_settings = '/_config/drupal/settings.docker.php';
+if (file_exists($container_settings)) {
+  include $container_settings;
+}
+```
+
+This file applies environment-driven Drupal runtime settings such as file paths, config sync, hash salt, trusted host patterns, reverse proxy settings, and site name overrides.
+
 ## Important environment variables
 
 ### Application paths
 
 | Variable | Default | Description |
 |---|---:|---|
-| `APP_ROOT` | `/var/www/html` | Drupal application root |
-| `DOC_ROOT` | `/var/www/html/web` | Apache document root |
+| `APP_ROOT` | `/app` | Drupal project root mounted inside the container |
+| `PUBLIC_ROOT` | `/var/www/html` | Apache-served public path symlinked to the resolved Drupal docroot |
 | `FILES_DIR` | `/mnt/files` | External files mount path |
 | `DRUPAL_SUBDIR` | empty | Optional Apache alias path |
 | `APACHE_PORT` | `8080` | Apache listen port |
@@ -378,7 +406,7 @@ services:
   drupal:
     image: alchatti/drupal:apache-fpm
     volumes:
-      - ./web:/var/www/html
+      - ./:/app
       - drupal-files:/mnt/files
 
 volumes:
@@ -426,34 +454,28 @@ docker run --rm alchatti/drupal:builder verify-builder.sh
 ### Apache/PHP verification
 
 ```bash
-verify-apache-php.sh
+./test/test-apache-php.sh <IMAGE>
 ```
 
-Validates:
+Validates from outside the container:
 
-- Apache can serve a generated PHP file
+- Apache can serve a PHP file volume-mounted before container start
 - PHP runtime values are applied
 - upload size overrides work
 - `post_max_size` override works
 - `max_execution_time` override works
-- memory values are printed for review
 
 Example:
 
 ```bash
-docker run -d \
-  --name apache-php-test \
-  -e DRUPAL_SUBDIR=/test-site \
-  -e PHP_UPLOAD_MAX_FILESIZE=128M \
-  -e PHP_POST_MAX_SIZE=129M \
-  -e PHP_MAX_EXECUTION_TIME=180 \
-  alchatti/drupal:apache-fpm
-
-docker exec apache-php-test verify-apache-php.sh
-docker rm -f apache-php-test
+PHP_UPLOAD_MAX_FILESIZE=128M \
+PHP_POST_MAX_SIZE=129M \
+PHP_MAX_EXECUTION_TIME=180 \
+EXPECTED_PHP_SAPI=fpm-fcgi \
+./test/test-apache-php.sh alchatti/drupal:apache-fpm
 ```
 
-A temporary test file is created under the document root and removed automatically after the test.
+The probe PHP file is written to a temporary directory on the host, mounted as the web root, and removed automatically after the test.
 
 ## Build locally
 
@@ -486,6 +508,14 @@ docker build \
   --build-arg NODE_VERSION=24 \
   -t alchatti/drupal:8.4-builder-trixie \
   -f builder/Dockerfile .
+```
+
+### Files vmaker
+
+```bash
+docker build \
+  -t alchatti/drupal:files-vmaker \
+  -f vmaker/Dockerfile .
 ```
 
 ## Run locally
@@ -543,11 +573,11 @@ php_versions: '["8.4"]'
 os_versions: '["trixie"]'
 blueprints: |
   {
+    "vmaker": {},
     "builder": {
       "build_args": ["NODE=24"],
       "test_command": "docker run --rm \"$IMAGE\" verify-builder.sh"
     },
-    "serversideup-apache-fpm": {},
     "apache": {
       "test_command": "..."
     },
@@ -620,6 +650,7 @@ www-data
 The image prepares writable paths for:
 
 ```text
+/app
 /var/www/html
 /_config
 /mnt/files
