@@ -2,7 +2,7 @@ name: Build & Publish Images
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths-ignore:
       - '**/*.md'
       - '**/*.txt'
@@ -16,9 +16,12 @@ concurrency:
   group: docker-publish-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   prepare:
-    uses: ./.github/workflows/matrix-generator.yml
+    uses: AUSharjah/org-actions/.github/workflows/php-matrix.yml@rc
     with:
       php_versions: '["8.4"]'
       os_versions: '["trixie"]'
@@ -39,28 +42,22 @@ jobs:
 
   build:
     needs: prepare
-    permissions:
-      contents: read
 
     strategy:
       max-parallel: 4
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
-    uses: alchatti/.github/.github/workflows/docker-build-push.yml@main
+    uses: AUSharjah/org-actions/.github/workflows/docker-cloud-build.yml@rc
     with:
-      context: .
-      dockerfile: ${{ matrix.context }}/Dockerfile
+      context: ${{ matrix.context }}
+      dockerfile: ${{ matrix.dockerfile }}
       platforms: linux/amd64,linux/arm64
       build_args: ${{ matrix.build_args }}
       tags: ${{ matrix.tags }}
       target: ${{ matrix.target }}
-
       test_command: ${{ matrix.test_command }}
       test_platform: linux/amd64
-      test_image_tag: ${{ matrix.test_image_tag }}
 
-      cache_from: type=gha,scope=${{ matrix.variant }}
-      cache_to: type=gha,mode=max,scope=${{ matrix.variant }}
-
-    secrets: inherit
+    secrets:
+      DOCKER_PAT_GITHUB_CI: ${{ secrets.DOCKER_PAT_GITHUB_CI }}
