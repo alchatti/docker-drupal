@@ -1,0 +1,22 @@
+services:
+  files-init:
+    image: my-drupal-files-vmaker
+    command: seed
+    volumes:
+      - drupal-files:/mnt/files
+    restart: "no"
+
+  drupal:
+    image: my-drupal-app
+    depends_on:
+      files-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      DRUPAL_SUBDIR: site-a
+    volumes:
+      - drupal-files:/mnt/files
+
+volumes:
+  drupal-files:

@@ -1,0 +1,120 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Production cleanup script.
+ * Removes development-only files after build.
+ *
+ * Usage:
+ *   cleanup-build             # destructive cleanup
+ *   cleanup-build --dry-run   # preview only
+ */
+
+$root = $argv[1] ?? '/app';
+$dryRun = in_array('--dry-run', $argv);
+
+if (!str_starts_with($root, '/') || !is_dir($root)) {
+    fwrite(STDERR, "❌ Root must be an existing absolute path: $root\n");
+    exit(1);
+}
+
+$configPath = '/usr/local/bin/cleanup.json';
+if (!file_exists($configPath)) {
+    fwrite(STDERR, "❌ cleanup.json missing @ $configPath\n");
+    exit(1);
+}
+
+$config = json_decode(file_get_contents($configPath), true);
+if ($config === null) {
+    fwrite(STDERR, "❌ Invalid JSON in cleanup.json\n");
+    exit(1);
+}
+
+$removePatterns = $config['removePatterns'] ?? [];
+$removeDirs     = $config['removeDirs']     ?? [];
+$protectedPaths = $config['protectedPaths'] ?? [];
+
+/**
+ * Determine if a path is protected from deletion.
+ */
+function isProtected(string $relative, array $protectedPaths): bool
+{
+    foreach ($protectedPaths as $p) {
+        if (str_starts_with($relative, $p)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Recursively remove a directory and all its contents using native PHP.
+ */
+function removeDir(string $path): void
+{
+    try {
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+    } catch (UnexpectedValueException $e) {
+        throw new RuntimeException("Failed to open directory for removal (may not exist or lack permissions): $path - " . $e->getMessage(), 0, $e);
+    }
+
+    foreach ($items as $item) {
+        if ($item->isDir()) {
+            if (!rmdir($item->getRealPath())) {
+                $error = error_get_last();
+                $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
+                throw new RuntimeException("Failed to remove directory: " . $item->getRealPath() . " - $reason");
+            }
+        } else {
+            if (!unlink($item->getRealPath())) {
+                $error = error_get_last();
+                $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
+                throw new RuntimeException("Failed to remove file: " . $item->getRealPath() . " - $reason");
+            }
+        }
+    }
+
+    if (!rmdir($path)) {
+        $error = error_get_last();
+        $reason = (is_array($error) && isset($error['message'])) ? $error['message'] : 'unknown error';
+        throw new RuntimeException("Failed to remove directory: $path - $reason");
+    }
+}
+
+$directory = new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS);
+$iterator  = new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::CHILD_FIRST);
+
+foreach ($iterator as $path => $info) {
+    // Build a path-separator-stripped relative path so it matches protectedPaths entries.
+    $relative = substr($path, strlen(rtrim($root, '/')) + 1);
+
+    // Skip protected
+    if (isProtected($relative, $protectedPaths)) {
+        continue;
+    }
+
+    // Directories to remove
+    foreach ($removeDirs as $dir) {
+        if ($info->isDir() && fnmatch($dir, $info->getFilename())) {
+            echo ($dryRun ? "[dry-run] Would remove dir: $relative\n"
+                          : "Removing dir: $relative\n");
+            if (!$dryRun) removeDir($path);
+            continue 2;
+        }
+    }
+
+    // File patterns
+    foreach ($removePatterns as $pattern) {
+        if (fnmatch($pattern, $info->getFilename())) {
+            echo ($dryRun ? "[dry-run] Would remove file: $relative\n"
+                          : "Removing file: $relative\n");
+            if (!$dryRun) unlink($path);
+            continue 2;
+        }
+    }
+}
+
+echo $dryRun ? "✅ Dry-run complete.\n" : "✅ Cleanup complete.\n"; 
