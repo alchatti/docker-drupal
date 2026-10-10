@@ -3,7 +3,7 @@ set -euo pipefail
 
 APACHE_PORT="${APACHE_PORT:-8080}"
 HEALTHCHECK_PATH="${HEALTHCHECK_PATH:-/}"
-DOC_ROOT="${DOC_ROOT:-/var/www/html/web}"
+DOC_ROOT="${DOC_ROOT:-/app/web}"
 
 curl -fsSL --max-time 4 "http://127.0.0.1:${APACHE_PORT}${HEALTHCHECK_PATH}" >/dev/null
 

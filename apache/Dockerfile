@@ -17,7 +17,6 @@ LABEL org.opencontainers.image.title="Drupal Apache mod_php runtime" \
 
 ENV DRUPAL_RUNTIME_MODE=mod_php \
   DRUPAL_SUBDIR= \
-  DRUPAL_PUBLIC_DIR=web \
   APACHE_PORT=8080 \
   APP_ROOT=/app \
   DOC_ROOT= \
@@ -82,17 +81,10 @@ COPY --chmod=755 scripts/ /usr/local/bin/
 RUN set -eux; \
   install-php-dependencies.sh; \
   configure-drupal-runtime.sh; \
-  chown -R www-data:www-data \
-    "${APP_ROOT}" \
-    /var/www \
-    "${CONFIG_ROOT}" \
-    "${FILES_DIR}" \
-    /var/run/apache2 \
-    /var/lock/apache2 \
-    /var/log/apache2 \
-    /etc/apache2; \
-    # Runtime Dependency
-    install-runtimes.sh --mariadb
+  # Runtime Dependency
+  install-runtimes.sh --mariadb; \
+  mkdir -p /_config/drupal
+COPY --chown=www-data:www-data --chmod=644 settings.docker.php /_config/drupal/settings.docker.php
 
 WORKDIR /app
 

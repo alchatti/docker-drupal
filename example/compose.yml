@@ -1,11 +1,22 @@
 services:
-  php:
-    image: drupal-testflight:latest
+  files-init:
+    image: my-drupal-files-vmaker
+    command: seed
+    volumes:
+      - drupal-files:/mnt/files
+    restart: "no"
+
+  drupal:
+    image: my-drupal-app
+    depends_on:
+      files-init:
+        condition: service_completed_successfully
     ports:
-      - "80:8080"
+      - "8080:8080"
     environment:
-    # https://serversideup.net/open-source/docker-php/docs/reference/environment-variable-specification
-      PHP_MEMORY_LIMIT: "512M"
-      PHP_OPCACHE_ENABLE: "1"
-      PHP_DISPLAY_ERRORS: “Off"
-      PHP_POST_MAX_SIZE: "25M"
+      DRUPAL_SUBDIR: site-a
+    volumes:
+      - drupal-files:/mnt/files
+
+volumes:
+  drupal-files:

@@ -14,7 +14,6 @@ fi
 apt-get update
 
 apt-get install -y --no-install-recommends \
-    7zip \
     libfreetype6-dev \
     libicu-dev \
     libjpeg62-turbo-dev \

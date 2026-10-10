@@ -5,29 +5,29 @@ set -euo pipefail
 #   s6-fpm  -> Apache + PHP-FPM under s6-overlay
 #   mod_php -> Apache foreground with mod_php
 #
+# Opinionated runtime layout:
+#   APP_ROOT=/app
+#   DOC_ROOT=/app/web
+#   PUBLIC_ROOT=/var/www/html
+#
+# Public files policy:
+#   The app image must contain:
+#     /app/web/files -> /mnt/files/public
+#
+# The runtime entrypoint verifies the symlink but does not create or migrate
+# public files. Volume folder creation, seeding, archive, and restore are owned
+# by the vmaker image.
+#
 # Runtime Controls:
 #   DRUPAL_RUNTIME_MODE: s6-fpm | mod_php
 #   APP_ROOT: Drupal project root, default /app
-#   DRUPAL_PUBLIC_DIR: web | docroot, default web
-#   DOC_ROOT: optional absolute override for Drupal public docroot
 #   PUBLIC_ROOT: Apache public root, default /var/www/html
-#   DRUPAL_SUBDIR: optional URL subdirectory, e.g. test-site or /test-site
+#   DRUPAL_SUBDIR: optional URL subdirectory, e.g. site-a or /site-a
 #
 # Missing app fallback:
 #   APP_MISSING_PLACEHOLDER=1
 #   APP_MISSING_HTTP_STATUS=503
 #   APP_MISSING_MESSAGE="Drupal application was not found..."
-#
-# Layout:
-#   APP_ROOT=/app
-#   DRUPAL_PUBLIC_DIR=web      -> DOC_ROOT=/app/web
-#   DRUPAL_PUBLIC_DIR=docroot  -> DOC_ROOT=/app/docroot
-#
-#   DRUPAL_SUBDIR empty:
-#     /var/www/html -> /app/web or /app/docroot
-#
-#   DRUPAL_SUBDIR=test-site:
-#     /var/www/html/test-site -> /app/web or /app/docroot
 
 : "${DRUPAL_RUNTIME_MODE:=s6-fpm}"
 
@@ -60,13 +60,15 @@ fi
 
 : "${APP_ROOT:=/app}"
 : "${PUBLIC_ROOT:=/var/www/html}"
-: "${DRUPAL_PUBLIC_DIR:=web}"
-: "${DOC_ROOT:=}"
 : "${DRUPAL_SUBDIR:=}"
+
+: "${FILES_DIR:=/mnt/files}"
+: "${DRUPAL_PUBLIC_FILES_PATH:=files}"
+: "${DRUPAL_PUBLIC_FILES_SOURCE:=${FILES_DIR}/public}"
 
 : "${APP_MISSING_PLACEHOLDER:=1}"
 : "${APP_MISSING_HTTP_STATUS:=503}"
-: "${APP_MISSING_MESSAGE:=Drupal application was not found. Please mount or copy the application code into APP_ROOT and ensure DRUPAL_PUBLIC_DIR points to web or docroot.}"
+: "${APP_MISSING_MESSAGE:=Drupal application was not found. Please mount or copy the application code into APP_ROOT. This image expects the Drupal public docroot to be /app/web.}"
 
 : "${APACHE_CONFIG_DIR:=/_config/apache}"
 : "${FPM_RUNTIME_CONF:=/usr/local/etc/php-fpm.d/zz-runtime.conf}"
@@ -112,6 +114,8 @@ create_missing_app_index() {
     echo "[system-init] Drupal index.php was not found under: ${DOC_ROOT}"
     echo "[system-init] Creating fallback missing-application page: ${DOC_ROOT}/index.php"
 
+    mkdir -p "${DOC_ROOT}"
+
     cat > "${DOC_ROOT}/index.php" <<'PHP_MISSING_APP'
 <?php
 
@@ -130,8 +134,7 @@ header('X-Drupal-Runtime: missing-application');
 echo $message . PHP_EOL;
 echo PHP_EOL;
 echo 'APP_ROOT=' . (getenv('APP_ROOT') ?: '/app') . PHP_EOL;
-echo 'DRUPAL_PUBLIC_DIR=' . (getenv('DRUPAL_PUBLIC_DIR') ?: 'web') . PHP_EOL;
-echo 'DOC_ROOT=' . (getenv('DOC_ROOT') ?: '') . PHP_EOL;
+echo 'DOC_ROOT=' . (getenv('DOC_ROOT') ?: '/app/web') . PHP_EOL;
 PHP_MISSING_APP
 
     chmod 0644 "${DOC_ROOT}/index.php"
@@ -146,7 +149,19 @@ prepare_public_root() {
         mkdir -p "${DOC_ROOT}"
     fi
 
+    # Capture whether a real app already exists before the placeholder may be created.
+    _app_pre_existed=0
+    if [ -f "${DOC_ROOT}/index.php" ]; then
+        _app_pre_existed=1
+    fi
+
     create_missing_app_index
+
+    # Validate the public-files symlink only when an application was genuinely
+    # present before this entrypoint ran; skip when running on the placeholder.
+    if [ "${_app_pre_existed}" = "1" ] && [ "$(basename "${DOC_ROOT}")" = "web" ]; then
+        validate_app_files_symlink
+    fi
 
     mkdir -p "$(dirname "${PUBLIC_ROOT}")"
 
@@ -181,6 +196,12 @@ prepare_public_root() {
 
     cat > "${APACHE_RUNTIME_CONF}" <<EOF_RUNTIME
 <Directory ${DOC_ROOT}>
+    Options FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
+
+<Directory ${DRUPAL_PUBLIC_FILES_SOURCE}>
     Options FollowSymLinks
     AllowOverride All
     Require all granted
@@ -370,10 +391,12 @@ fi
 
 echo "[system-init] Runtime initialization complete."
 echo "[system-init] APP_ROOT=${APP_ROOT}"
-echo "[system-init] DRUPAL_PUBLIC_DIR=${DRUPAL_PUBLIC_DIR}"
 echo "[system-init] DOC_ROOT=${DOC_ROOT}"
 echo "[system-init] PUBLIC_ROOT=${PUBLIC_ROOT}"
-echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-<root>}"
+echo "[system-init] DRUPAL_SUBDIR=${CLEAN_SUBDIR:-}"
+echo "[system-init] FILES_DIR=${FILES_DIR}"
+echo "[system-init] DRUPAL_PUBLIC_FILES_PATH=${DRUPAL_PUBLIC_FILES_PATH}"
+echo "[system-init] DRUPAL_PUBLIC_FILES_SOURCE=${DRUPAL_PUBLIC_FILES_SOURCE}"
 echo "[system-init] Handing control over to: $*"
 
 exec "$@"
